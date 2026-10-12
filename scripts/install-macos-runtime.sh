@@ -42,6 +42,28 @@ case ":$PATH:" in
     *) PATH="${PATH:+$PATH:}/usr/local/share/dotnet" ;;
 esac
 export PATH
+# [Bootstrap] Enabled=0 in loader.ini skips the hook entirely, as the Linux
+# launcher block does; the managed bootstrap repeats the same check.
+ini="$app_dir/VulkanStory/loader.ini"
+enabled=0
+if [ -f "$ini" ]; then
+    size=$(wc -c < "$ini" | tr -d ' ')
+    if [ "$size" -le 65536 ]; then
+        enabled=$(awk '
+            /^[ \t]*[;#]/ { next }
+            /^[ \t]*\[/ { section = tolower($0); gsub(/[ \t]/, "", section); next }
+            {
+                eq = index($0, "="); if (eq == 0) next
+                key = tolower(substr($0, 1, eq - 1)); gsub(/[ \t]/, "", key)
+                if (section == "[bootstrap]" && key == "enabled") {
+                    value = substr($0, eq + 1); gsub(/[ \t]/, "", value)
+                    print (value ~ /^-?[0-9]+$/) ? ((value + 0 != 0) ? 1 : 0) : 1
+                }
+            }' "$ini" | tail -1)
+        [ -n "$enabled" ] || enabled=1
+    fi
+fi
+if [ "$enabled" = "0" ]; then exec "$app_dir/Vintagestory.bin" "$@"; fi
 hook="$app_dir/VulkanStory/managed/VulkanStory.Bootstrap.dll"
 if [ -n "${DOTNET_STARTUP_HOOKS:-}" ]; then
     DOTNET_STARTUP_HOOKS="$hook:$DOTNET_STARTUP_HOOKS"

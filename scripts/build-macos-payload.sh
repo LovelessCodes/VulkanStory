@@ -54,6 +54,8 @@ dotnet publish "$repo/tools/VulkanStory.PerformanceHarness/VulkanStory.Performan
 cp -f "$repo/src/VulkanStory.Mod/modinfo.json" "$out/Mods/vulkanstory/modinfo.json"
 cp -f "$repo/src/VulkanStory.Input.Companion/modinfo.json" "$out/Mods/vulkanstoryinput/modinfo.json"
 cp -f "$repo/packaging/loader.ini" "$out/VulkanStory/loader.ini"
+cp -f "$repo/scripts/toggle-macos-runtime.sh" "$out/VulkanStory/tools/toggle-macos-runtime.sh"
+chmod +x "$out/VulkanStory/tools/toggle-macos-runtime.sh"
 
 # The deploy layout keeps native runtimes out of managed/, in the RID directory.
 for library in libSDL3.dylib libshaderc_shared.dylib; do
