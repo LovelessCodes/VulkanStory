@@ -186,6 +186,7 @@ internal sealed class ShaderPackLibrary
                     failures[slot] = one.Errors.Count > 0 ? Shorten(one.Errors) : "no variant compiled";
                     continue;
                 }
+                merged.Manifest.CapacityTier = one.Manifest.CapacityTier;
                 merged.Manifest.Programs.AddRange(one.Manifest.Programs);
                 foreach (KeyValuePair<string, byte[]> file in one.Files) merged.Files[file.Key] = file.Value;
             }
