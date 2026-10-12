@@ -169,9 +169,11 @@ renderer already uses.
 
 - A pack is a directory under `shaderpacks/` beside the runtime
   (`<game>/VulkanStory/shaderpacks/<id>/`), or any absolute directory;
-  zips are not part of contract 1. `VULKANSTORY_VK_SHADER_PACK` names the pack's
-  id or directory; the Options menu carries the same selection once the pack UI
-  lands. One pack is active at a time.
+  zips are not part of contract 1. One pack is active at a time.
+  `VULKANSTORY_VK_SHADER_PACK` names the pack's id or directory; when it is
+  unset and exactly one pack is installed it activates automatically, and
+  several installed packs need an explicit selection (the status line says so).
+  The Options menu carries the same selection once the pack UI lands.
 - The loader materializes a build tree under
   `<shader cache>/vulkanstory-vulkan/shaderpacks/<id>-<hash>/`: the pack's
   sources renamed to their slot names, plus the runtime's embedded copy of
@@ -257,15 +259,19 @@ hand-written pack proves the contract.
    validation, discovery under `shaderpacks/` beside the runtime, replacement of
    any shipped slot through `NativeShaderBuilder` and the shipped library, option
    defaults as spliced defines, per-slot fallback with refusal reasons, and a
-   content-hashed build tree under the shader cache. `samples/shaderpacks/example.tint`
-   proves it on `chunkopaque`; the mechanism is generic over shipped programs.
+   content-hashed build tree under the shader cache.
+   `samples/shaderpacks/example.tint` proves it on `chunkopaque` (always drawn)
+   and `colorgrade` (drawn only when the game grades the image itself, so it is
+   invisible in normal play); the mechanism is generic over shipped programs.
 2. **Declared pack passes and pack targets.** Extend the pass registry with
    pack-owned attachments; prove state restore, lifetime and read-after-write
    at `AfterPostProcessing`.
 3. **Options UI and hot reload.** Per-pack options become selectable and
    persisted; a command rebuilds the pack without restarting the world.
-4. **Post-slot coverage and pack textures** (`noisetex`, custom textures): a
-   pack-provided post fragment is the next proof after the tint sample.
+4. **Post-slot coverage, pack textures and a first-party pack.** The sample's
+   `colorgrade` replacement demonstrates post-slot substitution; a visible
+   always-on post effect needs pack-owned targets and declared passes (plan 2)
+   or a program the game draws every frame.
 5. **OIT policy and broader slot coverage** if a pack needs them.
 6. **OptiFine/Iris adapter** as a separate milestone.
 

@@ -1,35 +1,42 @@
 # Example shader pack
 
 `example.tint` is the reference pack for contract 1
-([docs/shader-packs.md](../../docs/shader-packs.md)). It replaces the shipped
-`chunkopaque` program with a copy of
-[shaders/native/chunkopaque.glsl](../../shaders/native/chunkopaque.glsl) that
-multiplies lit terrain by a faint warm tint behind the `PACK_TINT` option.
+([docs/shader-packs.md](../../docs/shader-packs.md)). It is deliberately obvious:
+lit terrain gets a heavy warm duotone, so the pack is plainly visible in any
+world view.
+
+- `chunkopaque` is a copy of [shaders/native/chunkopaque.glsl](../../shaders/native/chunkopaque.glsl)
+  with the duotone behind the `PACK_TINT` option. Terrain always draws, so this
+  is the part that is always visible.
+- `colorgrade` is a copy of [shaders/native/colorgrade.glsl](../../shaders/native/colorgrade.glsl)
+  with a warm grade behind the `PACK_GRADE` option. The game only draws this
+  program when it grades the image itself (sleep, damage), so expect it to be
+  invisible during normal play; it shows that a pack can replace post programs
+  too.
 
 ## Try it
 
 1. Copy `example.tint` into `<game>/VulkanStory/shaderpacks/` (the folder that
    contains `shaders-vk.pak`).
-2. Start the game with `VULKANSTORY_VK_SHADER_PACK=example.tint` set in the
-   environment. An absolute pack directory also works. This is the development
-   selection until the Options menu carries the pack list.
-3. The log (`Logs/client-main.log`, or the console) reports the pack and its
-   program count:
+2. Start the game. With exactly one pack installed it activates automatically;
+   with several, set `VULKANSTORY_VK_SHADER_PACK=example.tint` to pick one. The
+   Options menu carries the pack list once it exists.
+3. The log (`Logs/client-main.log`, or the console) reports the pack:
 
    ```
    [VulkanStory] shaders: pack 'example.tint' built from <path>
-   [VulkanStory] shaders: native 50 programs from ...; pack 'example.tint' replaces 1 of 1 declared program(s)
+   [VulkanStory] shaders: native 52 programs from ...; pack 'example.tint' replaces 2 of 2 declared program(s)
    ```
 
-4. Lit terrain is slightly warmer. `PACK_TINT` sits at its manifest default
-   until per-pack options are selectable in game; edit `default` in `pack.json`
-   to compare, and the pack rebuilds on the next launch.
+4. The world is visibly warmer and more saturated, with soft vignetting. Turn an
+   option off in `pack.json` (`"default": false`) and relaunch to compare: the
+   pack rebuilds at startup. `PACK_GRADE` off leaves only the terrain tint.
 
 ## Deliberately break it
 
-Set the option to `"default": "not a bool"` to see the refusal path, or delete a
-`}` in the source to see per-slot fallback: the pack stays loaded, the log names
-the failing program, and the shipped program draws the world.
+Set an option to a bad value (`"default": "not a bool"`) to see the refusal path,
+or delete a `}` in one source to see per-slot fallback: the pack stays loaded,
+the log names the failing program, and the shipped program draws that slot.
 
 ## What a pack may do in contract 1
 
@@ -41,5 +48,5 @@ the failing program, and the shipped program draws the world.
   and the motion output interface.
 
 Not yet: pack-provided targets and declared passes, pack textures, per-pack
-option UI, hot reload, and the OptiFine/Iris format. A pack must not ship its
-own `include/` directory.
+option UI, hot reload, and the OptiFine/Iris format. A pack must not ship its own
+`include/` directory.

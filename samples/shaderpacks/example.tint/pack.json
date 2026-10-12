@@ -1,12 +1,14 @@
 {
   "contract": 1,
   "id": "example.tint",
-  "name": "Example tint",
-  "version": "0.1.0",
+  "name": "Example tint and grade",
+  "version": "0.2.0",
   "options": [
-    { "id": "PACK_TINT", "type": "bool", "default": true }
+    { "id": "PACK_TINT", "type": "bool", "default": true },
+    { "id": "PACK_GRADE", "type": "bool", "default": true }
   ],
   "programs": [
-    { "slot": "chunkopaque", "source": "shaders/chunkopaque.glsl" }
+    { "slot": "chunkopaque", "source": "shaders/chunkopaque.glsl" },
+    { "slot": "colorgrade", "source": "shaders/colorgrade.glsl" }
   ]
 }
