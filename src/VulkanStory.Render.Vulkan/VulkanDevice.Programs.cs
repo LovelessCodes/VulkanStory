@@ -180,15 +180,6 @@ public sealed unsafe partial class VulkanDevice
             }
         }
 
-        // The shipped corpus declares the desktop capacities (bindings.glsl) and must not
-        // be bound against a reduced tier's layout; runtime-translated shaders are
-        // capacity-agnostic, so the tier keeps working without the corpus.
-        if (NativeShadersEnabled != false && SetConvention.PortabilityTier)
-        {
-            MirrorValidationMessage("--- native shaders disabled: the shipped corpus declares desktop capacities");
-            NativeShadersEnabled = false;
-        }
-
         (NativeShaderLibrary.Mode mode, string? path, string reason) = NativeShaderLibrary.Resolve(
             NativeShadersEnabled, NativeShaderDirectory,
             Environment.GetEnvironmentVariable(NativeShaderLibrary.EnabledVariable),
@@ -202,6 +193,15 @@ public sealed unsafe partial class VulkanDevice
             NativeShaderLibrary.Mode.Source => NativeShaderLibrary.BuildFromSource(path!, _shaderCompiler, out reason),
             _ => null,
         };
+        // A corpus must match the capacity tier the layout was built with; one compiled for
+        // other capacities declares array sizes the descriptor set cannot hold. Translated
+        // shaders are capacity-agnostic, so the tier keeps working without the corpus.
+        if (_nativeShaders is { } corpus && corpus.Manifest.CapacityTier != SetConvention.CapacityTierToken)
+        {
+            MirrorValidationMessage("--- native shaders disabled: corpus capacities are " +
+                corpus.Manifest.CapacityTier + ", the device tier is " + SetConvention.CapacityTierToken);
+            _nativeShaders = null;
+        }
 
         string enabledVariable = Environment.GetEnvironmentVariable(NativeShaderLibrary.EnabledVariable) ?? "";
         bool ignoreScan = IgnoreModShaderScan ?? NativeShaderLibrary.IgnoresModScan(enabledVariable);

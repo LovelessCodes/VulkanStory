@@ -51,6 +51,12 @@ publish "$repo/src/VulkanStory.Input.Companion/VulkanStory.Input.Companion.cspro
 # The external capture harness the in-game `.vulkanstory profile` command launches.
 dotnet publish "$repo/tools/VulkanStory.PerformanceHarness/VulkanStory.PerformanceHarness.csproj" -c "$configuration" \
     --self-contained false -o "$out/VulkanStory/tools/performance" -p:DebugType=none >/dev/null
+# Native shader corpus for the reduced capacity tier this platform selects: the
+# runtime refuses a corpus whose recorded tier does not match the device's.
+pack_root="$repo/artifacts/macos-shaders/$configuration"
+dotnet run --project "$repo/tools/VulkanStory.Shaders.Compiler/VulkanStory.Shaders.Compiler.csproj" \
+    -c "$configuration" -- --build "$repo/shaders/native" "$pack_root" --capacity-tier portability >/dev/null
+cp -f "$pack_root/shaders-vk.pak" "$out/VulkanStory/shaders-vk.pak"
 cp -f "$repo/src/VulkanStory.Mod/modinfo.json" "$out/Mods/vulkanstory/modinfo.json"
 cp -f "$repo/src/VulkanStory.Input.Companion/modinfo.json" "$out/Mods/vulkanstoryinput/modinfo.json"
 cp -f "$repo/packaging/loader.ini" "$out/VulkanStory/loader.ini"

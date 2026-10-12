@@ -75,6 +75,7 @@ internal sealed class NativeShaderBuilder
     {
         var result = new NativeShaderBuildResult();
         result.Manifest.Toolchain = _compiler.Identity;
+        result.Manifest.CapacityTier = SetConvention.CapacityTierToken;
 
         if (!Directory.Exists(sourceDirectory))
         {
@@ -124,6 +125,7 @@ internal sealed class NativeShaderBuilder
         try
         {
             source = ExpandIncludes(Path.Combine(sourceDirectory, fileName), sourceDirectory, includes);
+            source = ApplyCapacityTier(source);
         }
         catch (InvalidDataException error)
         {
@@ -365,6 +367,19 @@ internal sealed class NativeShaderBuilder
         variant.SpecializationConstants.AddRange(constants.Values);
 
         return errors.Count == errorsBefore;
+    }
+
+    /// <summary>Rewrites bindings.glsl's capacity defines to the active tier's arrays.</summary>
+    /// <remarks>The corpus declares its array sizes textually; a reduced tier (portability devices) must
+    /// compile the same sources with its own capacities so the SPIR-V matches the layout it binds.</remarks>
+    private static string ApplyCapacityTier(string source)
+    {
+        foreach (SetConvention.Binding array in SetConvention.TextureArrays)
+        {
+            string name = "OPTIMUM_CAPACITY_" + array.Define["OPTIMUM_BINDING_".Length..];
+            source = Regex.Replace(source, @"(#define[ \t]+" + name + @"[ \t]+)\d+", "${1}" + array.Capacity);
+        }
+        return source;
     }
 
     /// <summary>The native include names that stand for a GLSL 330 owner file (<c>fogandlight.vsh</c> is <c>fogandlight.vert.glsl</c>).</summary>
@@ -741,6 +756,28 @@ public static class NativeShaderTool
     public static int Run(string[] args, TextWriter output, TextWriter error)
     {
         string mode = args.Length > 0 ? args[0] : "";
+        SetConvention.TextureArrayCapacities? tier = null;
+        int tierOption = Array.IndexOf(args, "--capacity-tier");
+        if (tierOption >= 0)
+        {
+            if (tierOption != args.Length - 2)
+            {
+                error.WriteLine(Usage);
+                return 2;
+            }
+            tier = args[tierOption + 1] switch
+            {
+                "desktop" => SetConvention.DesktopCapacities,
+                "portability" => SetConvention.PortabilityCapacities,
+                _ => null,
+            };
+            if (tier is null)
+            {
+                error.WriteLine("error: --capacity-tier must be desktop or portability");
+                return 2;
+            }
+            args = args[..tierOption];
+        }
         int expected = mode == "--single" ? 4 : 3;
         if (mode is not ("--build" or "--verify" or "--single" or "--pack") || args.Length != expected)
         {
@@ -766,6 +803,10 @@ public static class NativeShaderTool
         string? program = mode == "--single" ? args[1] : null;
         string source = args[expected - 2];
         string outputRoot = args[expected - 1];
+
+        // The corpus and the layout must agree: a reduced capacity tier compiles the same
+        // sources with its own capacities (ApplyCapacityTier) and records the tier.
+        SetConvention.SelectCapacities(tier ?? SetConvention.DesktopCapacities);
 
         using var compiler = new ShaderCompiler();
         NativeShaderBuildResult result = new NativeShaderBuilder(compiler).Build(source, program);

@@ -79,6 +79,9 @@ internal static class SetConvention
     /// <summary>Whether the reduced portability capacities are active for this process.</summary>
     public static bool PortabilityTier => capacities.Equals(PortabilityCapacities);
 
+    /// <summary>Stable token of the active capacities, recorded in native shader manifests.</summary>
+    public static string CapacityTierToken => PortabilityTier ? "portability" : "desktop";
+
     /// <summary>
     /// Binds the tier device selection chose. The layout, the bindless table and the
     /// native-corpus gate all read it, so it is set before any device object is created.

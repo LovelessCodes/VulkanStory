@@ -34,6 +34,9 @@ internal sealed class NativeShaderManifest
     /// <summary><see cref="ShaderCompiler.Identity" /> of the compiler that produced every blob.</summary>
     public string Toolchain = "";
 
+    /// <summary>Capacity tier the corpus was compiled for; a reduced-tier layout needs a matching corpus.</summary>
+    public string CapacityTier = "desktop";
+
     /// <summary>Sorted by name.</summary>
     public List<NativeProgram> Programs = new();
 
@@ -71,6 +74,7 @@ internal sealed class NativeShaderManifest
             writer.WriteStartObject();
             writer.WriteNumber("schemaVersion", SchemaVersion);
             writer.WriteString("toolchain", Toolchain);
+            writer.WriteString("capacityTier", CapacityTier);
             writer.WriteStartArray("programs");
             foreach (NativeProgram program in Programs) WriteProgram(writer, program);
             writer.WriteEndArray();
@@ -248,6 +252,7 @@ internal sealed class NativeShaderManifest
             {
                 SchemaVersion = version,
                 Toolchain = Str(root, "toolchain"),
+                CapacityTier = OptionalStr(root, "capacityTier"),
             };
             foreach (JsonElement program in Arr(root, "programs"))
             {
@@ -387,6 +392,11 @@ internal sealed class NativeShaderManifest
 
     private static string Str(JsonElement parent, string property) =>
         Get(parent, property).GetString() ?? throw new InvalidDataException("shader manifest: null '" + property + "'");
+
+    /// <summary>Reads an optional string property, defaulting to the desktop capacity tier for older manifests.</summary>
+    private static string OptionalStr(JsonElement parent, string property) =>
+        parent.TryGetProperty(property, out JsonElement value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString() ?? "desktop" : "desktop";
 
     private static int Int(JsonElement parent, string property) => Get(parent, property).GetInt32();
 
