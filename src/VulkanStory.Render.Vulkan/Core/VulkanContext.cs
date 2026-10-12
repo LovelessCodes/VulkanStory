@@ -1262,6 +1262,26 @@ internal sealed unsafe class VulkanContext : IDisposable
         bool enablePresentFences = maintenanceFeatures.SwapchainMaintenance1;
         if (enablePresentFences) deviceExtensions.Add(maintenanceExtension!);
 
+        // A portability implementation exposes its subset capabilities through a chained
+        // struct; without it the implementation and validation must assume every subset
+        // feature is unsupported, which forbids comparison samplers in the bindless set
+        // (MoltenVK reports depth-compare support through this struct).
+        var portabilityFeatures = new PhysicalDevicePortabilitySubsetFeaturesKHR
+        {
+            SType = StructureType.PhysicalDevicePortabilitySubsetFeaturesKhr,
+        };
+        bool enablePortabilityFeatures =
+            deviceExtensionsAvailable.ContainsKey(PortabilitySubsetExtensionName);
+        if (enablePortabilityFeatures)
+        {
+            var query = new PhysicalDeviceFeatures2
+            {
+                SType = StructureType.PhysicalDeviceFeatures2,
+                PNext = &portabilityFeatures,
+            };
+            Api.GetPhysicalDeviceFeatures2(PhysicalDevice, &query);
+        }
+
         using var vendorRequirements = new DeviceRequirements(
             Api, Instance, PhysicalDevice, deviceExtensionsAvailable, deviceExtensions)
         { Vulkan12 = &vulkan12 };
@@ -1276,6 +1296,7 @@ internal sealed unsafe class VulkanContext : IDisposable
         { dynamicState3Features.PNext = optionalFeatures; optionalFeatures = &dynamicState3Features; }
         if (enablePresentId) { presentId.PNext = optionalFeatures; optionalFeatures = &presentId; }
         if (enablePresentFences) { maintenanceFeatures.PNext = optionalFeatures; optionalFeatures = &maintenanceFeatures; }
+        if (enablePortabilityFeatures) { portabilityFeatures.PNext = optionalFeatures; optionalFeatures = &portabilityFeatures; }
         if (vendorRequirements.Chain != null)
         {
             // The contributor chain is owned through vkCreateDevice. Append the native optional
