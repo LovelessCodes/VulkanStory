@@ -241,6 +241,10 @@ internal sealed class RendererSettingsPanel
                 break;
             case 3:
                 Switch("Enable VulkanStory (restart)", "Enabled");
+                if (OperatingSystem.IsMacOS())
+                {
+                    Text("Disabling leaves the client on its OpenGL path. macOS provides OpenGL 4.1 and the game needs 4.3, so the client cannot start without this renderer on this platform.");
+                }
                 if (RendererChoices.VendorProviders)
                 {
                     Switch("OpenXR headset / stereo (restart)", "OpenXr");

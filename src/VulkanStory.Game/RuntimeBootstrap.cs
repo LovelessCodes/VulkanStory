@@ -159,9 +159,14 @@ internal sealed partial class ProcessRuntime(Action<string, string> trace)
             throw new InvalidOperationException("Headless renderer is disabled; refusing visible OpenGL fallback.");
         Routing.Dispose();
         Publish("disabled");
-        Notify("runtime.disabled", modDisabled
+        // macOS caps OpenGL at 4.1 while the game asks for 4.3: without this renderer the
+        // client does not start, so the disable is recorded with that consequence.
+        Notify("runtime.disabled", (modDisabled
             ? "VulkanStory is disabled in the game mod manager; original window startup continues."
-            : "VulkanStory settings disable the renderer; original window startup continues.");
+            : "VulkanStory settings disable the renderer; original window startup continues.") +
+            (OperatingSystem.IsMacOS()
+                ? " This platform's OpenGL path cannot start the client (macOS provides 4.1, the game needs 4.3)."
+                : ""));
         return false;
     }
     /// <summary>Finds the active session for the exact original platform instance.</summary>
