@@ -328,6 +328,13 @@ public sealed unsafe partial class VulkanDevice : IDisposable, ILatencyStageList
 
     /// <summary>The native shaders loaded at device start; null when they are off (docs/vulkan.md).</summary>
     private NativeShaderLibrary? _nativeShaders;
+
+    /// <summary>The selected shader pack's overrides, built after the shipped library; null when none is selected or it was refused (docs/shader-packs.md).</summary>
+    private ShaderPackLibrary? _shaderPack;
+
+    /// <summary>One line about the pack for <see cref="NativeShaderStatus" />; empty when no pack was selected.</summary>
+    private string _shaderPackStatus = "";
+
     private int _nativeLinks, _rewrittenLinks, _failedNativeLinks;
     private int _nativeLinksReported, _rewrittenLinksReported, _failedNativeLinksReported;
 
@@ -371,6 +378,9 @@ public sealed unsafe partial class VulkanDevice : IDisposable, ILatencyStageList
     /// <summary>The scan <see cref="LinkProgram" /> consults: null when there is none or it is ignored.</summary>
     private Func<string, bool>? _modShaderScan;
     private readonly HashSet<string> _modOverrideLogged = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Pack programs whose link fell back to the shipped program, so each failure logs once.</summary>
+    private readonly HashSet<string> _packFailureLogged = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>What <see cref="Initialize" /> made of the native shaders: the origin and program count, or why they are off.</summary>
     internal string NativeShaderStatus { get; private set; } = "not loaded";

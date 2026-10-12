@@ -80,9 +80,30 @@ public sealed unsafe partial class VulkanDevice
         }
         else if (_nativeShaders != null)
         {
-            NativeShaderLibrary.Outcome outcome = _nativeShaders.TryLink(passName, stages, out native, out nativeDetail);
-            nativeFailed = outcome == NativeShaderLibrary.Outcome.Failed;
-            if (outcome != NativeShaderLibrary.Outcome.Native) native = null;
+            // A selected pack's program outranks the shipped one (docs/shader-packs.md): a slot the
+            // pack did not build, or could not serve, falls back to the shipped program.
+            NativeShaderLibrary.Outcome outcome = NativeShaderLibrary.Outcome.Miss;
+            if (_shaderPack != null)
+            {
+                outcome = _shaderPack.Library.TryLink(passName, stages, out native, out nativeDetail);
+                if (outcome == NativeShaderLibrary.Outcome.Native)
+                {
+                    if (RenderTrace.Enabled)
+                    {
+                        RenderTrace.Write("program '" + passName + "' linked from pack '" + _shaderPack.Manifest.Id + "' [" + nativeDetail + "]");
+                    }
+                }
+                else if (outcome == NativeShaderLibrary.Outcome.Failed)
+                {
+                    ReportPackFailure(passName, nativeDetail);
+                }
+            }
+            if (outcome != NativeShaderLibrary.Outcome.Native)
+            {
+                outcome = _nativeShaders.TryLink(passName, stages, out native, out nativeDetail);
+                nativeFailed = outcome == NativeShaderLibrary.Outcome.Failed;
+                if (outcome != NativeShaderLibrary.Outcome.Native) native = null;
+            }
         }
 
         int programId = 0;
@@ -198,10 +219,13 @@ public sealed unsafe partial class VulkanDevice
         bool ignoreScan = IgnoreModShaderScan ?? NativeShaderLibrary.IgnoresModScan(enabledVariable);
         _modShaderScan = ignoreScan ? null : ShaderProgramOverriddenByMods;
 
+        LoadShaderPack(searchDirectory);
+
         NativeShaderStatus = _nativeShaders == null
             ? "off: " + reason
             : _nativeShaders.Manifest.Programs.Count + " programs from " + _nativeShaders.Origin +
               (reason.Length > 0 ? "; " + reason : "");
+        if (_shaderPackStatus.Length > 0) NativeShaderStatus += "; " + _shaderPackStatus;
         if (_nativeShaders != null && ignoreScan && ShaderProgramOverriddenByMods != null)
         {
             NativeShaderStatus += "; mod shader scan ignored (" + NativeShaderLibrary.EnabledVariable + "=" + NativeShaderLibrary.ForceValue + ")";
@@ -234,6 +258,85 @@ public sealed unsafe partial class VulkanDevice
     private void ReportNativeFailure(string passName, string detail)
     {
         string line = "[VulkanStory] shaders: native '" + passName + "' failed, linked through the rewriter: " + detail;
+        LogShaderLine(line);
+        if (RenderTrace.Enabled) RenderTrace.Write(line);
+    }
+
+    /// <summary>
+    /// Loads the selected shader pack over the shipped library (docs/shader-packs.md). Runs from
+    /// <see cref="LoadNativeShaders" />, after the shipped manifest is known and before any program links,
+    /// so every slot can be validated against it. The selection is <see cref="NativeShaderLibrary.PackVariable" />
+    /// until the Options menu carries it.
+    /// </summary>
+    private void LoadShaderPack(string? searchDirectory)
+    {
+        string selection = Environment.GetEnvironmentVariable(NativeShaderLibrary.PackVariable)?.Trim() ?? "";
+        if (selection.Length == 0) return;
+
+        if (_nativeShaders == null)
+        {
+            _shaderPackStatus = "shader pack '" + selection + "' not loaded: native shaders are off";
+            return;
+        }
+
+        string? packDirectory = ResolvePackDirectory(selection, searchDirectory);
+        if (packDirectory == null)
+        {
+            _shaderPackStatus = "shader pack '" + selection + "' not loaded: no directory at " +
+                (System.IO.Path.IsPathRooted(selection)
+                    ? selection
+                    : System.IO.Path.Combine(searchDirectory ?? "", "shaderpacks", selection));
+            return;
+        }
+
+        string? cacheRoot = ResolveShaderCacheRoot(ShaderCacheDirectory,
+            Environment.GetEnvironmentVariable("VULKANSTORY_VULKAN_SHADER_CACHE"));
+        if (cacheRoot == null)
+        {
+            _shaderPackStatus = "shader pack '" + selection + "' not loaded: no shader cache directory";
+            return;
+        }
+
+        ShaderPackLibrary? pack = ShaderPackLibrary.Load(packDirectory, _nativeShaders.Manifest, _shaderCompiler, cacheRoot, out string reason);
+        if (pack == null)
+        {
+            _shaderPackStatus = "shader pack '" + selection + "' not loaded: " + reason;
+            return;
+        }
+
+        _shaderPack = pack;
+        foreach (KeyValuePair<string, string> failure in pack.Failures)
+        {
+            LogShaderLine("[VulkanStory] shaders: pack '" + pack.Manifest.Id + "' program '" + failure.Key +
+                "' did not build, the shipped program is used: " + failure.Value);
+        }
+        _shaderPackStatus = "pack '" + pack.Manifest.Id + "' replaces " + pack.BuiltPrograms + " of " +
+            pack.Manifest.Programs.Count + " declared program(s)" +
+            (pack.Failures.Count > 0 ? ", " + pack.Failures.Count + " refused" : "");
+        LogShaderLine("[VulkanStory] shaders: pack '" + pack.Manifest.Id + "' built from " + pack.Origin);
+    }
+
+    /// <summary>An absolute pack directory, or an id under <c>shaderpacks/</c> beside the runtime.</summary>
+    private static string? ResolvePackDirectory(string selection, string? searchDirectory)
+    {
+        if (System.IO.Path.IsPathRooted(selection))
+        {
+            return System.IO.Directory.Exists(selection) ? selection : null;
+        }
+        if (string.IsNullOrEmpty(searchDirectory)) return null;
+        string candidate = System.IO.Path.Combine(searchDirectory, "shaderpacks", selection);
+        return System.IO.Directory.Exists(candidate) ? candidate : null;
+    }
+
+    /// <summary>Logs, once per program, that a pack's program could not serve a link and the shipped program is used.</summary>
+    private void ReportPackFailure(string passName, string detail)
+    {
+        lock (_packFailureLogged)
+        {
+            if (!_packFailureLogged.Add(passName)) return;
+        }
+        string line = "[VulkanStory] shaders: pack '" + (_shaderPack?.Manifest.Id ?? "?") + "' program '" + passName +
+            "' failed to link, the shipped program is used: " + detail;
         LogShaderLine(line);
         if (RenderTrace.Enabled) RenderTrace.Write(line);
     }

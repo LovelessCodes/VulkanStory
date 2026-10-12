@@ -127,6 +127,8 @@
     <Compile Include="Shaders/NativeShaderLibrary.cs" />
     <Compile Include="Shaders/NativeShaderManifest.cs" />
     <Compile Include="Shaders/NativeShaderPack.cs" />
+    <Compile Include="Shaders/ShaderPackLibrary.cs" />
+    <Compile Include="Shaders/ShaderPackManifest.cs" />
     <Compile Include="Shaders/SetConvention.cs" />
     <Compile Include="Shaders/SpirvReflection.cs" />
     <Compile Include="Upscale/Ngx/NgxDeviceRequirements.cs" />
@@ -160,6 +162,11 @@
     </EmbeddedResource>
     <EmbeddedResource Include="../../shaders/native/occlusion/*.comp">
       <LogicalName>shaders-vk/occlusion/%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+    <!-- The native include set, embedded so a pack source compiles against the same includes the shipped
+         programs were built from; ShaderPackLibrary materializes them into the pack build tree. -->
+    <EmbeddedResource Include="../../shaders/native/include/*.glsl">
+      <LogicalName>VulkanStory.native.include.%(Filename)%(Extension)</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
 </Project>
