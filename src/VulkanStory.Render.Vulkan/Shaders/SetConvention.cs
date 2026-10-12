@@ -15,7 +15,8 @@ namespace VulkanStory.Render.Vulkan.Shaders;
 /// | push | per draw | texture slot indices and per-draw scalars, at most <see cref="PushConstantBytes" /> |
 ///
 /// Array sizes are docs/vulkan.md#bindless-descriptors's starting sizes; the device
-/// floor (<see cref="Core.DescriptorIndexingFloor" />) is their sum.
+/// floor (<see cref="Core.DescriptorIndexingFloor" />) is their sum, and a device that
+/// cannot hold them selects <see cref="PortabilityCapacities" /> instead.
 /// </summary>
 internal static class SetConvention
 {
@@ -46,6 +47,49 @@ internal static class SetConvention
         UnsignedTexture2DCapacity + SignedTexture2DCapacity + Shadow2DCapacity + Shadow2DArrayCapacity +
         ShadowCubeCapacity;
 
+    /// <summary>One tier's set-1 array capacities, in <see cref="TextureArrays" /> order.</summary>
+    public readonly record struct TextureArrayCapacities(
+        uint Texture2D, uint Texture2DArray, uint Cube, uint Texture3D,
+        uint Unsigned2D, uint Signed2D, uint Shadow2D, uint Shadow2DArray, uint ShadowCube)
+    {
+        /// <summary>Every set-1 descriptor this tier declares.</summary>
+        public uint Total => Texture2D + Texture2DArray + Cube + Texture3D +
+            Unsigned2D + Signed2D + Shadow2D + Shadow2DArray + ShadowCube;
+    }
+
+    /// <summary>The capacities <c>bindings.glsl</c> and the native corpus are compiled with.</summary>
+    public static readonly TextureArrayCapacities DesktopCapacities =
+        new(Texture2DCapacity, Texture2DArrayCapacity, TextureCubeCapacity, Texture3DCapacity,
+            UnsignedTexture2DCapacity, SignedTexture2DCapacity, Shadow2DCapacity, Shadow2DArrayCapacity,
+            ShadowCubeCapacity);
+
+    /// <summary>
+    /// Capacities that fit a portability device's per-set descriptor cap: MoltenVK reports
+    /// <c>maxPerSetDescriptors</c> 1212, and this tier declares 1200 across set 1.
+    /// </summary>
+    public static readonly TextureArrayCapacities PortabilityCapacities =
+        new(1024, 64, 32, 16, 16, 16, 16, 8, 8);
+
+    private static TextureArrayCapacities capacities = DesktopCapacities;
+    private static Binding[] textureArrays = BuildTextureArrays(DesktopCapacities);
+
+    /// <summary>The selected device tier's capacities; the layout, the bindless table and the floor read this.</summary>
+    public static TextureArrayCapacities Capacities => capacities;
+
+    /// <summary>Whether the reduced portability capacities are active for this process.</summary>
+    public static bool PortabilityTier => capacities.Equals(PortabilityCapacities);
+
+    /// <summary>
+    /// Binds the tier device selection chose. The layout, the bindless table and the
+    /// native-corpus gate all read it, so it is set before any device object is created.
+    /// </summary>
+    /// <param name="selected">The capacities the selected device satisfies.</param>
+    public static void SelectCapacities(TextureArrayCapacities selected)
+    {
+        capacities = selected;
+        textureArrays = BuildTextureArrays(selected);
+    }
+
     /// <summary>A binding declared once in bindings.glsl: its define, value and, for samplers, the declaration.</summary>
     public readonly record struct Binding(string Define, int Value, string GlslType, string Name, uint Capacity);
 
@@ -63,19 +107,21 @@ internal static class SetConvention
         new("OPTIMUM_BINDING_LIQUID_DEPTH", 5, "sampler2D", "liquidDepth", 1),
     };
 
-    /// <summary>Set 1: one runtime-sized array per GLSL sampled type.</summary>
-    public static readonly Binding[] TextureArrays =
-    {
-        new("OPTIMUM_BINDING_TEXTURES_2D", 0, "sampler2D", "optimumTextures2D", Texture2DCapacity),
-        new("OPTIMUM_BINDING_TEXTURES_2D_ARRAY", 1, "sampler2DArray", "optimumTextures2DArray", Texture2DArrayCapacity),
-        new("OPTIMUM_BINDING_TEXTURES_CUBE", 2, "samplerCube", "optimumTexturesCube", TextureCubeCapacity),
-        new("OPTIMUM_BINDING_TEXTURES_3D", 3, "sampler3D", "optimumTextures3D", Texture3DCapacity),
-        new("OPTIMUM_BINDING_TEXTURES_2D_UINT", 4, "usampler2D", "optimumTextures2DUint", UnsignedTexture2DCapacity),
-        new("OPTIMUM_BINDING_TEXTURES_2D_INT", 5, "isampler2D", "optimumTextures2DInt", SignedTexture2DCapacity),
-        new("OPTIMUM_BINDING_TEXTURES_2D_SHADOW", 6, "sampler2DShadow", "optimumTextures2DShadow", Shadow2DCapacity),
-        new("OPTIMUM_BINDING_TEXTURES_2D_ARRAY_SHADOW", 7, "sampler2DArrayShadow", "optimumTextures2DArrayShadow", Shadow2DArrayCapacity),
-        new("OPTIMUM_BINDING_TEXTURES_CUBE_SHADOW", 8, "samplerCubeShadow", "optimumTexturesCubeShadow", ShadowCubeCapacity),
-    };
+    /// <summary>Set 1: one array per GLSL sampled type, sized by the tier device selection bound.</summary>
+    public static Binding[] TextureArrays => textureArrays;
+
+    private static Binding[] BuildTextureArrays(TextureArrayCapacities value) =>
+    [
+        new("OPTIMUM_BINDING_TEXTURES_2D", 0, "sampler2D", "optimumTextures2D", value.Texture2D),
+        new("OPTIMUM_BINDING_TEXTURES_2D_ARRAY", 1, "sampler2DArray", "optimumTextures2DArray", value.Texture2DArray),
+        new("OPTIMUM_BINDING_TEXTURES_CUBE", 2, "samplerCube", "optimumTexturesCube", value.Cube),
+        new("OPTIMUM_BINDING_TEXTURES_3D", 3, "sampler3D", "optimumTextures3D", value.Texture3D),
+        new("OPTIMUM_BINDING_TEXTURES_2D_UINT", 4, "usampler2D", "optimumTextures2DUint", value.Unsigned2D),
+        new("OPTIMUM_BINDING_TEXTURES_2D_INT", 5, "isampler2D", "optimumTextures2DInt", value.Signed2D),
+        new("OPTIMUM_BINDING_TEXTURES_2D_SHADOW", 6, "sampler2DShadow", "optimumTextures2DShadow", value.Shadow2D),
+        new("OPTIMUM_BINDING_TEXTURES_2D_ARRAY_SHADOW", 7, "sampler2DArrayShadow", "optimumTextures2DArrayShadow", value.Shadow2DArray),
+        new("OPTIMUM_BINDING_TEXTURES_CUBE_SHADOW", 8, "samplerCubeShadow", "optimumTexturesCubeShadow", value.ShadowCube),
+    ];
 
     /// <summary>
     /// Set 2's program record: every non-frame uniform that is not in the push block

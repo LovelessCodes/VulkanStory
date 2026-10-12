@@ -89,7 +89,8 @@ internal readonly record struct DescriptorIndexingSupport(
     uint MaxDescriptorSetUpdateAfterBindSampledImages,
     uint MaxDescriptorSetUpdateAfterBindSamplers,
     uint MaxDescriptorSetUpdateAfterBindUniformBuffersDynamic,
-    uint MaxPushConstantsSize);
+    uint MaxPushConstantsSize,
+    uint MaxPerSetDescriptors);
 
 /// <summary>
 /// The device floor for decision 9: one pipeline layout whose set 1 holds
@@ -102,9 +103,10 @@ internal readonly record struct DescriptorIndexingSupport(
 internal static class DescriptorIndexingFloor
 {
     /// <summary>
-    /// Sum of the set-1 array capacities (<see cref="Shaders.SetConvention" />, the
+    /// Sum of the desktop set-1 array capacities (<see cref="Shaders.SetConvention" />, the
     /// starting sizes in docs/vulkan.md#bindless-descriptors "Implementation for this
-    /// renderer").
+    /// renderer"). The reduced portability tier declares fewer;
+    /// <see cref="RequiredSampledImages" /> follows the selected tier.
     /// </summary>
     public const uint BindlessSampledImages = Shaders.SetConvention.TextureArrayCapacityTotal;
 
@@ -116,7 +118,8 @@ internal static class DescriptorIndexingFloor
     /// limits, and the per-stage update-after-bind limits count every set in the
     /// layout, set 0 included.
     /// </summary>
-    public const uint RequiredSampledImages = BindlessSampledImages + FrameTextures;
+    public static uint RequiredSampledImages(Shaders.SetConvention.TextureArrayCapacities capacities) =>
+        capacities.Total + FrameTextures;
 
     /// <summary>
     /// Set 0's frame block and set 2's program record are both dynamic uniform buffers in
@@ -128,10 +131,11 @@ internal static class DescriptorIndexingFloor
     public const uint RequiredPushConstantBytes = 128;
 
     /// <summary>
-    /// Every requirement the device misses, as the feature or limit name the spec uses
-    /// (limits with the reported and the required value). Empty when the floor is met.
+    /// Every requirement a capacity tier misses, as the feature or limit name the spec
+    /// uses (limits with the reported and the required value). Empty when the floor is met.
     /// </summary>
-    public static List<string> Missing(in DescriptorIndexingSupport support)
+    public static List<string> Missing(in DescriptorIndexingSupport support,
+        Shaders.SetConvention.TextureArrayCapacities capacities)
     {
         var missing = new List<string>();
         if (!support.RuntimeDescriptorArray) missing.Add("runtimeDescriptorArray");
@@ -140,20 +144,43 @@ internal static class DescriptorIndexingFloor
         // A per-draw index from a push constant is dynamic but uniform over the draw.
         if (!support.ShaderSampledImageArrayDynamicIndexing) missing.Add("shaderSampledImageArrayDynamicIndexing");
 
+        uint sampledImages = RequiredSampledImages(capacities);
         AtLeast(missing, "maxPerStageDescriptorUpdateAfterBindSampledImages",
-            support.MaxPerStageDescriptorUpdateAfterBindSampledImages, RequiredSampledImages);
+            support.MaxPerStageDescriptorUpdateAfterBindSampledImages, sampledImages);
         AtLeast(missing, "maxPerStageDescriptorUpdateAfterBindSamplers",
-            support.MaxPerStageDescriptorUpdateAfterBindSamplers, RequiredSampledImages);
+            support.MaxPerStageDescriptorUpdateAfterBindSamplers, sampledImages);
         AtLeast(missing, "maxDescriptorSetUpdateAfterBindSampledImages",
-            support.MaxDescriptorSetUpdateAfterBindSampledImages, RequiredSampledImages);
+            support.MaxDescriptorSetUpdateAfterBindSampledImages, sampledImages);
         AtLeast(missing, "maxDescriptorSetUpdateAfterBindSamplers",
-            support.MaxDescriptorSetUpdateAfterBindSamplers, RequiredSampledImages);
+            support.MaxDescriptorSetUpdateAfterBindSamplers, sampledImages);
+        // Every set of the one layout is judged against the device's per-set descriptor
+        // cap; set 1's arrays dominate it (MoltenVK reports 1212 against the desktop
+        // set 1's 19456).
+        AtLeast(missing, "maxPerSetDescriptors", support.MaxPerSetDescriptors, capacities.Total);
         // Set 0's frame UBO and set 2's program record are dynamic and share the layout
         // with the update-after-bind set.
         AtLeast(missing, "maxDescriptorSetUpdateAfterBindUniformBuffersDynamic",
             support.MaxDescriptorSetUpdateAfterBindUniformBuffersDynamic, RequiredDynamicUniformBuffers);
         AtLeast(missing, "maxPushConstantsSize", support.MaxPushConstantsSize, RequiredPushConstantBytes);
         return missing;
+    }
+
+    /// <summary>
+    /// Picks the largest capacity tier the device satisfies: the desktop capacities when
+    /// it meets them, the reduced portability capacities when only those fit its per-set
+    /// descriptor cap, and a refusal otherwise (the desktop tier's misses).
+    /// </summary>
+    public static bool TrySelectTier(in DescriptorIndexingSupport support,
+        out Shaders.SetConvention.TextureArrayCapacities capacities, out List<string> missing)
+    {
+        capacities = Shaders.SetConvention.DesktopCapacities;
+        missing = Missing(support, capacities);
+        if (missing.Count == 0) return true;
+        List<string> reduced = Missing(support, Shaders.SetConvention.PortabilityCapacities);
+        if (reduced.Count != 0) return false;
+        capacities = Shaders.SetConvention.PortabilityCapacities;
+        missing = [];
+        return true;
     }
 
     private static void AtLeast(List<string> missing, string name, uint reported, uint required)

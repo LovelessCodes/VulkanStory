@@ -822,7 +822,10 @@ public sealed unsafe partial class VulkanDevice : IDisposable, ILatencyStageList
             (_context.Capabilities.DynamicColorBlend ? " (dynamic blend)" : "") +
             "; bindless sampled images per stage " +
             _context.Capabilities.DescriptorIndexing.MaxPerStageDescriptorUpdateAfterBindSampledImages +
-            " (needs " + DescriptorIndexingFloor.RequiredSampledImages + ")" +
+            " (needs " + DescriptorIndexingFloor.RequiredSampledImages(SetConvention.Capacities) + ")" +
+            "; capacity tier " + (SetConvention.PortabilityTier ? "portability " : "desktop ") +
+            SetConvention.Capacities.Total + "/" +
+            _context.Capabilities.DescriptorIndexing.MaxPerSetDescriptors + " per set" +
             "; push constants " + _context.Capabilities.DescriptorIndexing.MaxPushConstantsSize + " B" +
             "; " + _context.Capabilities.LatencySummary +
             "; vendor latency " + (_vendorLatency?.Kind.ToString() ?? "none"));

@@ -180,6 +180,15 @@ public sealed unsafe partial class VulkanDevice
             }
         }
 
+        // The shipped corpus declares the desktop capacities (bindings.glsl) and must not
+        // be bound against a reduced tier's layout; runtime-translated shaders are
+        // capacity-agnostic, so the tier keeps working without the corpus.
+        if (NativeShadersEnabled != false && SetConvention.PortabilityTier)
+        {
+            MirrorValidationMessage("--- native shaders disabled: the shipped corpus declares desktop capacities");
+            NativeShadersEnabled = false;
+        }
+
         (NativeShaderLibrary.Mode mode, string? path, string reason) = NativeShaderLibrary.Resolve(
             NativeShadersEnabled, NativeShaderDirectory,
             Environment.GetEnvironmentVariable(NativeShaderLibrary.EnabledVariable),

@@ -865,6 +865,16 @@ internal sealed unsafe class VulkanContext : IDisposable
             return false;
         }
 
+        // Bind the chosen device's capacity tier before anything sizes the layout:
+        // the same floor the usability check applied, read once more for the winner.
+        if (!DescriptorIndexingFloor.TrySelectTier(ReadDescriptorIndexingSupport(best),
+                out Shaders.SetConvention.TextureArrayCapacities capacities, out List<string> lost))
+        {
+            failureReason = "selected device lost its descriptor-indexing tier: " + string.Join("; ", lost);
+            return false;
+        }
+        Shaders.SetConvention.SelectCapacities(capacities);
+
         PhysicalDevice = best;
         return true;
     }
@@ -919,7 +929,13 @@ internal sealed unsafe class VulkanContext : IDisposable
         if (!features.Features.MultiDrawIndirect) missing.Add("multiDrawIndirect");
         // Decision 9: one pipeline layout with bindless textures. A device without
         // it stays on OpenGL rather than running a second, per-program layout path.
-        missing.AddRange(DescriptorIndexingFloor.Missing(ReadDescriptorIndexingSupport(device)));
+        // The tier decides the set-1 capacities the layout, the bindless table and
+        // the native-corpus gate use.
+        if (!DescriptorIndexingFloor.TrySelectTier(ReadDescriptorIndexingSupport(device),
+                out _, out List<string> tierMissing))
+        {
+            missing.AddRange(tierMissing);
+        }
 
         if (missing.Count > 0)
         {
@@ -942,7 +958,18 @@ internal sealed unsafe class VulkanContext : IDisposable
         };
         Api.GetPhysicalDeviceFeatures2(device, &features);
 
-        var vulkan12Properties = new PhysicalDeviceVulkan12Properties { SType = StructureType.PhysicalDeviceVulkan12Properties };
+        // VkPhysicalDeviceMaintenance3Properties.maxPerSetDescriptors bounds the total
+        // descriptor count of every set in the layout; MoltenVK's report is far below
+        // the desktop set-1 arrays and selects the portability capacity tier.
+        var maintenance3 = new PhysicalDeviceMaintenance3Properties
+        {
+            SType = StructureType.PhysicalDeviceMaintenance3Properties,
+        };
+        var vulkan12Properties = new PhysicalDeviceVulkan12Properties
+        {
+            SType = StructureType.PhysicalDeviceVulkan12Properties,
+            PNext = &maintenance3,
+        };
         var properties = new PhysicalDeviceProperties2
         {
             SType = StructureType.PhysicalDeviceProperties2,
@@ -960,7 +987,8 @@ internal sealed unsafe class VulkanContext : IDisposable
             MaxDescriptorSetUpdateAfterBindSampledImages: vulkan12Properties.MaxDescriptorSetUpdateAfterBindSampledImages,
             MaxDescriptorSetUpdateAfterBindSamplers: vulkan12Properties.MaxDescriptorSetUpdateAfterBindSamplers,
             MaxDescriptorSetUpdateAfterBindUniformBuffersDynamic: vulkan12Properties.MaxDescriptorSetUpdateAfterBindUniformBuffersDynamic,
-            MaxPushConstantsSize: properties.Properties.Limits.MaxPushConstantsSize);
+            MaxPushConstantsSize: properties.Properties.Limits.MaxPushConstantsSize,
+            MaxPerSetDescriptors: maintenance3.MaxPerSetDescriptors);
     }
 
     private bool TryFindGraphicsQueue(PhysicalDevice device, out uint family,
