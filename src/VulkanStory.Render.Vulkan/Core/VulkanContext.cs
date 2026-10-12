@@ -366,6 +366,14 @@ internal sealed unsafe class VulkanContext : IDisposable
                 if (!extensions.Contains(maintenance)) extensions.Add(maintenance);
             }
         }
+        // macOS portability implementations (MoltenVK, KosmicKrisp) are only returned
+        // by the loader when VK_KHR_portability_enumeration is enabled and the
+        // enumeration flag is set on the create info.
+        bool portabilityEnumeration = available.Contains(PortabilityEnumerationExtensionName);
+        if (portabilityEnumeration && !extensions.Contains(PortabilityEnumerationExtensionName))
+        {
+            extensions.Add(PortabilityEnumerationExtensionName);
+        }
         bool validation = options.EnableValidation && HasValidationLayer();
 
         // Extra layer checks (sync validation, best practices with the vendor sets,
@@ -481,6 +489,7 @@ internal sealed unsafe class VulkanContext : IDisposable
             var createInfo = new InstanceCreateInfo
             {
                 SType = StructureType.InstanceCreateInfo,
+                Flags = portabilityEnumeration ? InstanceCreateFlags.EnumeratePortabilityBitKhr : 0,
                 PNext = chainLayerSettings ? &layerSettings
                     : chainValidationFeatures ? (void*)&validationFeatures
                     : null,
@@ -521,6 +530,12 @@ internal sealed unsafe class VulkanContext : IDisposable
 
         return true;
     }
+
+    /// <summary>Instance extension that lets the loader return portability implementations.</summary>
+    internal const string PortabilityEnumerationExtensionName = "VK_KHR_portability_enumeration";
+
+    /// <summary>Device extension a portability implementation advertises; must be enabled when offered.</summary>
+    internal const string PortabilitySubsetExtensionName = "VK_KHR_portability_subset";
 
     /// <summary>Name of VK_EXT_validation_features; Silk.NET has no wrapper class for it.</summary>
     internal const string ValidationFeaturesExtensionName = "VK_EXT_validation_features";
@@ -1158,6 +1173,10 @@ internal sealed unsafe class VulkanContext : IDisposable
 
         var deviceExtensions = new List<string>();
         if (!options.Headless) deviceExtensions.Add("VK_KHR_swapchain");
+        // A portability implementation must have its subset extension enabled
+        // whenever the physical device advertises it.
+        if (deviceExtensionsAvailable.ContainsKey(PortabilitySubsetExtensionName))
+            deviceExtensions.Add(PortabilitySubsetExtensionName);
         if (wantCheckpoints) deviceExtensions.Add("VK_NV_device_diagnostic_checkpoints");
         if (wantDeviceFault) deviceExtensions.Add("VK_EXT_device_fault");
 

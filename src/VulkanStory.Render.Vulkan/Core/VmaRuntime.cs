@@ -71,8 +71,9 @@ internal sealed unsafe class VmaRuntime : IDisposable
     private static string BridgePath()
     {
         string binary = OperatingSystem.IsWindows() ? "VulkanStoryVma.dll" :
+            OperatingSystem.IsMacOS() ? "libVulkanStoryVma.dylib" :
             OperatingSystem.IsLinux() ? "libVulkanStoryVma.so" :
-            throw new PlatformNotSupportedException("The VMA bridge supports Windows and Linux.");
+            throw new PlatformNotSupportedException("The VMA bridge supports Windows, Linux and macOS.");
         if (IntPtr.Size != 8) throw new PlatformNotSupportedException("The VMA bridge requires a 64-bit process.");
         if (NativeRuntimePaths.IsDeployedPayload)
             return Path.Combine(NativeRuntimePaths.PackageNativeDirectory ??
@@ -90,7 +91,10 @@ internal sealed unsafe class VmaRuntime : IDisposable
             VerifyRepositoryPath(root, path);
             return path;
         }
-        string rid = OperatingSystem.IsWindows() ? "win-x64" : "linux-x64";
+        string rid = OperatingSystem.IsWindows() ? "win-x64" :
+            OperatingSystem.IsMacOS()
+                ? (RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "osx-arm64" : "osx-x64")
+                : "linux-x64";
         string configuration = "Release";
         for (DirectoryInfo? directory = new(NativeRuntimePaths.AssemblyDirectory); directory != null; directory = directory.Parent)
         {

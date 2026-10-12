@@ -28,8 +28,10 @@ internal static class NativeRuntimePaths
             string? rid = RuntimeInformation.ProcessArchitecture switch
             {
                 Architecture.X64 => OperatingSystem.IsWindows() ? "win-x64" :
+                    OperatingSystem.IsMacOS() ? "osx-x64" :
                     OperatingSystem.IsLinux() ? "linux-x64" : null,
                 Architecture.Arm64 => OperatingSystem.IsWindows() ? "win-arm64" :
+                    OperatingSystem.IsMacOS() ? "osx-arm64" :
                     OperatingSystem.IsLinux() ? "linux-arm64" : null,
                 _ => null
             };

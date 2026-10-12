@@ -40,12 +40,15 @@ public static class SdlNativeLibrary
     {
         if (!string.Equals(libraryName, "SDL3", StringComparison.Ordinal)) return 0;
         string? binary = OperatingSystem.IsWindows() ? "SDL3.dll" :
+            OperatingSystem.IsMacOS() ? "libSDL3.dylib" :
             OperatingSystem.IsLinux() ? "libSDL3.so" : null;
         if (binary is null) return 0;
         string? rid = RuntimeInformation.ProcessArchitecture switch
         {
-            Architecture.X64 => OperatingSystem.IsWindows() ? "win-x64" : "linux-x64",
-            Architecture.Arm64 => OperatingSystem.IsWindows() ? "win-arm64" : "linux-arm64",
+            Architecture.X64 => OperatingSystem.IsWindows() ? "win-x64" :
+                OperatingSystem.IsMacOS() ? "osx-x64" : "linux-x64",
+            Architecture.Arm64 => OperatingSystem.IsWindows() ? "win-arm64" :
+                OperatingSystem.IsMacOS() ? "osx-arm64" : "linux-arm64",
             _ => null
         };
         if (rid is null || string.IsNullOrEmpty(assembly.Location)) return 0;

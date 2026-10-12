@@ -44,7 +44,7 @@ internal sealed unsafe partial class ShaderCompiler : IDisposable
     {
         // Early-loaded assemblies do not participate in the game's dependency
         // manifest. A deployed payload must select its own compiler explicitly.
-        string name = OperatingSystem.IsWindows() ? "shaderc_shared.dll" : "libshaderc_shared.so";
+        string name = CompilerLibraryName;
         string path = Path.Combine(Core.NativeRuntimePaths.DirectoryContaining(name), name);
         if (Core.NativeRuntimePaths.IsDeployedPayload && !File.Exists(path))
             throw new DllNotFoundException($"VulkanStory shader compiler is missing: {path}");
@@ -109,6 +109,10 @@ internal sealed unsafe partial class ShaderCompiler : IDisposable
 
     private static string? _nativeIdentity;
 
+    /// <summary>Runtime file name of the shaderc build for the current OS.</summary>
+    private static string CompilerLibraryName => OperatingSystem.IsWindows() ? "shaderc_shared.dll" :
+        OperatingSystem.IsMacOS() ? "libshaderc_shared.dylib" : "libshaderc_shared.so";
+
     /// <summary>
     /// Everything besides the source that decides the SPIR-V: the options and the
     /// shaderc build. The C API exposes no compiler version, so the build is the
@@ -119,7 +123,7 @@ internal sealed unsafe partial class ShaderCompiler : IDisposable
     /// <summary>Returns the shader compiler native-runtime identity used in cache keys.</summary>
     internal static string NativeLibraryIdentity()
     {
-        string name = OperatingSystem.IsWindows() ? "shaderc_shared.dll" : "libshaderc_shared.so";
+        string name = CompilerLibraryName;
         string runtime = RuntimeInformation.RuntimeIdentifier;
 
         foreach (string? directory in new[]
