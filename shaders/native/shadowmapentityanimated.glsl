@@ -43,7 +43,8 @@ layout(location = 0) in vec3 vertexPositionIn;
 layout(location = 1) in vec2 uvIn;
 layout(location = 2) in vec4 colorIn;
 layout(location = 3) in int flags;
-layout(location = 4) in float damageEffectIn;
+// Integer mesh attribute read as the damage effect; see entityanimated.glsl.
+layout(location = 4) in int damageEffectIn;
 layout(location = 5) in int jointId;
 
 // UBO:Animation,0,4800

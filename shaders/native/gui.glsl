@@ -73,7 +73,11 @@ layout(location = 2) in vec4 colorIn;
 // Bit 13: low contrast mode
 // Bit 14-26: x/y/z normals, 12 bits total. Each axis with 1 sign bit and 3 value bits
 layout(location = 3) in int renderFlagsIn;
-layout(location = 4) in float damageEffectIn;
+// The GUI item mesh carries this attribute as an integer (the game's custom ints are
+// bound as integers and GL converted the value for this float input). Metal requires
+// the declaration to match the integer format, so read it as int and convert here;
+// float(int) is the same value GL produced.
+layout(location = 4) in int damageEffectIn;
 layout(location = 5) in int jointId;
 
 layout(std140, set = OPTIMUM_SET_STORAGE, binding = OPTIMUM_BINDING_ANIMATION) readonly buffer Animation
@@ -96,7 +100,7 @@ layout(location = 7) out float normalShadeIntensity;
 
 void main(void)
 {
-	damageEffectV = damageEffectIn;
+	damageEffectV = float(damageEffectIn);
 	uv = uvIn;
 
 	int glow = min(255, extraGlow + (renderFlagsIn & GlowLevelBitMask));

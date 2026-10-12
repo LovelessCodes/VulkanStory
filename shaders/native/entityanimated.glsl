@@ -112,7 +112,10 @@ layout(location = 0) in vec3 vertexPositionIn;
 layout(location = 1) in vec2 uvIn;
 layout(location = 2) in vec4 colorIn;
 layout(location = 3) in int flags;
-layout(location = 4) in float damageEffectIn;
+// The entity mesh carries this attribute as an integer (custom ints bound as integers;
+// GL converted the value for this float input). Metal requires the declaration to match
+// the integer format, so read it as int and convert here.
+layout(location = 4) in int damageEffectIn;
 layout(location = 5) in int jointId;
 
 // UBO:Animation,0,4800
@@ -160,7 +163,7 @@ layout(location = 13) out vec4 gnormal;
 
 void main(void)
 {
-	damageEffect = damageEffectIn;
+	damageEffect = float(damageEffectIn);
 	mat4 animModelMat = modelMatrix * ElementTransforms.values[jointId];
 	worldPos = animModelMat * vec4(vertexPositionIn, 1.0);
 
