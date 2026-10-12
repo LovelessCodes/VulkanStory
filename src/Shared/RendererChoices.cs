@@ -25,6 +25,14 @@ internal static class RendererChoices
     private static readonly (string Value, string Label)[] OcclusionQuality = [("low", "Low"), ("medium", "Medium"), ("high", "High"), ("ultra", "Ultra")];
     private static readonly (string Value, string Label)[] WorldgenWorkers = [("auto", "Auto"), ("off", "Off"), ("1", "1 worker"), ("2", "2 workers"), ("3", "3 workers")];
 
+    /// <summary>Every provider choice that exists without a vendor SDK.</summary>
+    private static readonly (string Value, string Label)[] OffOnly = [("off", "Off")];
+
+    /// <summary>Whether vendor provider choices (upscalers, frame generation, latency) exist on this platform.</summary>
+    /// <remarks>Vendor SDKs ship for Windows; DLSS additionally has a Linux runtime. macOS has none, so its
+    /// settings surface offers no provider rows at all - the runtime would only fall back.</remarks>
+    internal static bool VendorProviders => OperatingSystem.IsWindows() || OperatingSystem.IsLinux();
+
     private static readonly RendererRange RenderScale = new(.25f, 1f, 1f, 5, 100);
     private static readonly RendererRange TaaSharpness = new(0f, 1f, .2f, 5, 100);
     private static readonly RendererRange TaaMipBias = new(-2f, 0f, -.5f, 1, 10);
@@ -44,10 +52,10 @@ internal static class RendererChoices
     /// <exception cref="ArgumentException">The setting name has no defined choices.</exception>
     internal static IReadOnlyList<(string Value, string Label)> Get(string key, bool xess = false) => key switch
     {
-        "Upscaler" => Upscalers,
+        "Upscaler" => VendorProviders ? Upscalers : OffOnly,
         "UpscalerQuality" => xess ? XessQuality : Quality,
-        "FrameGeneration" => Generation,
-        "LowLatencyMode" => Latency,
+        "FrameGeneration" => VendorProviders ? Generation : OffOnly,
+        "LowLatencyMode" => VendorProviders ? Latency : OffOnly,
         "AmbientOcclusion" => Occlusion,
         "AmbientOcclusionPreset" => OcclusionQuality,
         "WorldgenWorkers" => WorldgenWorkers,

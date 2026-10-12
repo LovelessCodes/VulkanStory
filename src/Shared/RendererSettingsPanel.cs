@@ -190,13 +190,16 @@ internal sealed class RendererSettingsPanel
         switch (page)
         {
             case 0:
-                DefinedChoice("Upscaler", "Upscaler");
-                DefinedChoice("Quality", "UpscalerQuality");
+                if (RendererChoices.VendorProviders)
+                {
+                    DefinedChoice("Upscaler", "Upscaler");
+                    DefinedChoice("Quality", "UpscalerQuality");
+                }
                 Slider("Render scale (%)", "RenderScale");
                 Switch("Temporal anti-aliasing", "Taa");
                 Slider("TAA sharpness (%)", "TaaSharpness");
                 Slider("TAA mip bias", "TaaMipBias");
-                Slider("Upscaler mip adjustment (%)", "UpscalerLodBiasOffset");
+                if (RendererChoices.VendorProviders) Slider("Upscaler mip adjustment (%)", "UpscalerLodBiasOffset");
                 const string imageStatusKey = "vulkanstory-image-status";
                 string ImageStatus() => AppContext.GetData("VulkanStory.Runtime.Presentation") is Func<string> read
                     ? string.Join("\n", read().Split('\n').Where(line =>
@@ -206,15 +209,27 @@ internal sealed class RendererSettingsPanel
                 Label(ImageStatus(), CairoFont.WhiteSmallText(), ElementBounds.Fixed(0, y, width, 125), imageStatusKey);
                 refreshImageStatus = () => composer.GetDynamicText(imageStatusKey).SetNewText(ImageStatus(), false, true, false);
                 y += Math.Max(135, lastLabelHeight + 10);
-                Text("Quality controls the selected upscaler's internal resolution. Render scale applies when the upscaler is Off. FPS gains can be limited by VSync, a frame cap or the CPU.");
+                Text(RendererChoices.VendorProviders
+                    ? "Quality controls the selected upscaler's internal resolution. Render scale applies when the upscaler is Off. FPS gains can be limited by VSync, a frame cap or the CPU."
+                    : "Render scale applies to the whole image. FPS gains can be limited by VSync, a frame cap or the CPU.");
                 break;
             case 1:
-                DefinedChoice("Frame generation", "FrameGeneration");
-                Slider("Requested multiplier", "FrameGenerationMultiplier");
-                DefinedChoice("Low latency", "LowLatencyMode");
+                if (RendererChoices.VendorProviders)
+                {
+                    DefinedChoice("Frame generation", "FrameGeneration");
+                    Slider("Requested multiplier", "FrameGenerationMultiplier");
+                    DefinedChoice("Low latency", "LowLatencyMode");
+                }
                 Switch("Show FPS counter", "ShowFpsCounter");
-                Text("Available providers and multipliers depend on your GPU. Unsupported settings fall back automatically.");
-                Text("With frame generation selected, low latency remains enabled. Boost depends on the provider.");
+                if (RendererChoices.VendorProviders)
+                {
+                    Text("Available providers and multipliers depend on your GPU. Unsupported settings fall back automatically.");
+                    Text("With frame generation selected, low latency remains enabled. Boost depends on the provider.");
+                }
+                else
+                {
+                    Text("Frame generation and vendor latency need provider SDKs that this platform does not have.");
+                }
                 break;
             case 2:
                 DefinedChoice("Ambient occlusion", "AmbientOcclusion");
@@ -226,12 +241,15 @@ internal sealed class RendererSettingsPanel
                 break;
             case 3:
                 Switch("Enable VulkanStory (restart)", "Enabled");
-                Switch("OpenXR headset / stereo (restart)", "OpenXr");
-                Text("VR currently uses ordinary rendering. TAA, upscaling and frame generation remain desktop features.");
+                if (RendererChoices.VendorProviders)
+                {
+                    Switch("OpenXR headset / stereo (restart)", "OpenXr");
+                    Text("VR currently uses ordinary rendering. TAA, upscaling and frame generation remain desktop features.");
+                }
                 Switch("Controllers", "ControllerEnabled");
                 Switch("Touch input", "TouchEnabled");
                 Switch("Native shaders (restart)", "NativeShaders");
-                Switch("Streamline (restart)", "Streamline");
+                if (RendererChoices.VendorProviders) Switch("Streamline (restart)", "Streamline");
                 Text("Controller remapping, gyro and haptics are available from the controller settings panel.");
                 composer.AddSmallButton("Save and open controller settings", () => Editable() ? SaveAndOpenController() : true,
                     ElementBounds.Fixed(0, y, width, 30));
