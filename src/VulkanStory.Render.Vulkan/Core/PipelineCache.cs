@@ -205,6 +205,13 @@ internal sealed unsafe class GraphicsPipelineCache : IDisposable
         public required PrimitiveTopology Topology { get; init; }
     }
 
+    /// <summary>Pipeline identity for a failure message: the program and the state that keyed it.</summary>
+    /// <remarks>A driver can refuse one variant - MoltenVK failing an MSL compile, for one - while every
+    /// other variant succeeds, and the caller's stack does not say which. The message must.</remarks>
+    private static string Describe(PipelineRequest request) =>
+        " (program " + request.Program.ProgramId + ", topology " + request.Topology +
+        ", polygon " + request.PolygonMode + ", blends " + request.Blend.Length + ")";
+
     /// <summary>The pipeline for <paramref name="key" />, joining its prewarm or compiling on this thread on a miss.</summary>
     public Pipeline Get(PipelineKey key, PipelineRequest request)
     {
@@ -332,7 +339,7 @@ internal sealed unsafe class GraphicsPipelineCache : IDisposable
         }
         if (result != Result.PipelineCompileRequired)
         {
-            throw new InvalidOperationException("vkCreateGraphicsPipelines failed: " + result);
+            throw new InvalidOperationException("vkCreateGraphicsPipelines failed: " + result + Describe(request));
         }
 
         var job = new CompileJob(id, request, entry, prewarm: false);
@@ -376,7 +383,7 @@ internal sealed unsafe class GraphicsPipelineCache : IDisposable
         if (result == Result.PipelineCompileRequired) return false;
         if (result != Result.Success)
         {
-            throw new InvalidOperationException("vkCreateGraphicsPipelines failed: " + result);
+            throw new InvalidOperationException("vkCreateGraphicsPipelines failed: " + result + Describe(request));
         }
 
         Interlocked.Increment(ref _warm);
@@ -415,7 +422,7 @@ internal sealed unsafe class GraphicsPipelineCache : IDisposable
         }
         if (result != Result.Success)
         {
-            throw new InvalidOperationException("vkCreateGraphicsPipelines failed: " + result);
+            throw new InvalidOperationException("vkCreateGraphicsPipelines failed: " + result + Describe(request));
         }
         Interlocked.Increment(ref _compiledSync);
         VulkanStats.NotePipelineCompiledSync();
