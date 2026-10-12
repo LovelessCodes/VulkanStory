@@ -751,9 +751,14 @@ internal sealed unsafe class TextureManager : IDisposable
     /// used the texture, the copy goes inline into it instead, so a draw recorded
     /// before the upload still sees the old texels, as on GL.
     /// </summary>
+    /// <param name="preferInline">Records inline whenever the caller is the frame-recording
+    /// thread, even when the texture has no noted use yet. Callers whose target texture the
+    /// same frame will draw (a page atlas a draw samples later in the frame) need this: a
+    /// batched upload would leave the draw sampling the previous contents of the region or
+    /// layer for one frame.</param>
     public void Upload(
         int textureId, int level, int x, int y, uint width, uint height,
-        IntPtr pixels, int bytesPerPixel, uint layer = 0)
+        IntPtr pixels, int bytesPerPixel, uint layer = 0, bool preferInline = false)
     {
         VulkanTexture? texture = Get(textureId);
         if (texture == null || pixels == IntPtr.Zero) return;
@@ -762,7 +767,8 @@ internal sealed unsafe class TextureManager : IDisposable
         if (size == 0) return;
 
         VulkanStats.NoteUploadRequest();
-        CommandBuffer commandBuffer = _uploads.BeginRecording(_uploads.UsedByPendingFrame(texture.FrameUse));
+        CommandBuffer commandBuffer = _uploads.BeginRecording(
+            preferInline || _uploads.UsedByPendingFrame(texture.FrameUse));
         try
         {
             // Again under the lock: a delete on another thread either came first

@@ -177,10 +177,13 @@ public sealed unsafe partial class VulkanDevice
             GlEnums.TextureFormatFrom(internalFormat), layers: (uint)layers);
 
     /// <summary>Uploads borrowed RGBA pixels into one layer of an owned array texture.</summary>
+    /// <remarks>Inline during frame recording: the same frame's page draw samples the layer,
+    /// and a batched upload would show the previous layer contents for one frame (the map
+    /// atlas flicker on recycled slots).</remarks>
     public void UploadTexture2DArrayLayer(int textureId, int layer, int width, int height, IntPtr pixels)
     {
         FlushPendingClears(textureId);
-        _textures.Upload(textureId, 0, 0, 0, (uint)width, (uint)height, pixels, 4, (uint)layer);
+        _textures.Upload(textureId, 0, 0, 0, (uint)width, (uint)height, pixels, 4, (uint)layer, preferInline: true);
     }
 
     /// <summary>Uploads borrowed client pixels into a texture mip rectangle using the client pixel format.</summary>
