@@ -22,6 +22,7 @@ the `rewrite` branch. A release ZIP may predate changes documented here; the
 | [Bootstrap and installation](bootstrap-and-installation.md) | Host shim, startup hook, ZIP layout, installer and removal |
 | [Rendering](rendering.md) | Frame order, shaders, Vulkan resources, TAA, GTAO, providers and presentation |
 | [Mod integration](mod-integration.md) | Game RenderAPI, declared passes, attachments and motion writers |
+| [Shader packs](shader-packs.md) | Pack contract design for PACK-01: replaceable programs, inputs, declared passes, options |
 | [Development](development.md) | Source builds, packages, source navigation and diagnostics |
 | [Headless harness](headless-harness.md) | Isolated world captures and scripted runtime scenarios |
 

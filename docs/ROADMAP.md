@@ -52,7 +52,7 @@ Current release: [v0.1.3](https://github.com/KillerPixelCrew/VulkanStory/release
   2. Extend ordinary RenderAPI motion histories to custom moving geometry and retain resource/state contracts across mod rendering and world transitions.
   3. Keep repeated input registration and optional entity discovery resilient, and exercise the complete supplied mod set without patches keyed to mod IDs.
 
-- **PACK-01: Shader packs**
+- **PACK-01: Shader packs** ([contract design](shader-packs.md))
   1. Pack contract: replaceable programs, provided uniforms/samplers, readable and writable attachments, pass order, options. Decide which internal layouts become public API.
   2. Loader: `shaderpacks/` folder, pack selection and per-pack options in the Options menu, hot reload; compiled at runtime with the shipped shaderc.
   3. Per-program fallback to the built-in shaders on compile/link errors, with in-game error reporting.
