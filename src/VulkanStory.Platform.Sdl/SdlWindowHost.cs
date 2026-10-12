@@ -122,6 +122,9 @@ public sealed class SdlWindowHost : IDisposable
     {
         if (width <= 0 || height <= 0) throw new ArgumentOutOfRangeException(nameof(width));
         SdlNativeLibrary.EnsureRegistered();
+        // SDL loads its own Vulkan runtime on the first Vulkan call; pin it to the
+        // process runtime so instance and surface come from one implementation.
+        SdlVulkanLibrary.EnsurePinned();
         // The game has no inline composition renderer. Let the OS display IME
         // preedit and candidates; SDL_TEXT_INPUT remains the only committed text.
         SDL_SetHintWithPriority("SDL_IME_IMPLEMENTED_UI", "none", HintOverridePriority);
@@ -205,6 +208,8 @@ public sealed class SdlWindowHost : IDisposable
         RequireWindow();
         return SDL_SetHint("SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS", enabled ? "1" : "0");
     }
+    /// <summary>Sets SDL's process-wide Vulkan-library hint to an absolute runtime path.</summary>
+    internal static void PinVulkanLibrary(string path) => SDL_SetHint("SDL_VULKAN_LIBRARY", path);
     /// <summary>Waits through SDL for pending asynchronous window operations to settle.</summary>
     public void Sync() => Check(SDL_SyncWindow(RequireWindow()), "SDL_SyncWindow");
     /// <summary>Shows the window unless the host is required to stay hidden.</summary>

@@ -9,5 +9,6 @@
     <Compile Include="SdlEventPump.cs" />
     <Compile Include="SdlWindowCoordinates.cs" />
     <Compile Include="SdlNativeLibrary.cs" />
+    <Compile Include="SdlVulkanLibrary.cs" />
   </ItemGroup>
 </Project>

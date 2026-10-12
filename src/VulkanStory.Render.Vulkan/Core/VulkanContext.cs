@@ -7,6 +7,7 @@ using Silk.NET.Core.Native;
 using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.EXT;
 using Silk.NET.Vulkan.Extensions.KHR;
+using VulkanStory.Platform.Sdl;
 
 namespace VulkanStory.Render.Vulkan.Core;
 
@@ -297,10 +298,14 @@ internal sealed unsafe class VulkanContext : IDisposable
             // Resolve all renderer and extension entry points through Streamline
             // when active, including image/barrier/command-state interception.
             // The resolver borrows the verified bridge's interposer lifetime.
+            // Otherwise a process-resolved Vulkan runtime (macOS) is loaded by
+            // absolute path, matching the runtime SDL's surface path is pinned to.
             created.Api = created.Streamline is { } streamline
                 ? new Vk(new LamdaNativeContext(name =>
                     streamline.GetVulkanProcAddress(created.Instance, created.Device, name)))
-                : Vk.GetApi();
+                : SdlVulkanLibrary.ResolvedPath is { } runtime
+                    ? new Vk(new DefaultNativeContext(runtime))
+                    : Vk.GetApi();
         }
         catch (Exception error)
         {
