@@ -271,7 +271,15 @@ public sealed unsafe partial class VulkanDevice
     private void LoadShaderPack(string? searchDirectory)
     {
         string selection = Environment.GetEnvironmentVariable(NativeShaderLibrary.PackVariable)?.Trim() ?? "";
-        if (selection.Length == 0) return;
+        if (selection.Length == 0)
+        {
+            (selection, string note) = SingleInstalledPack(searchDirectory);
+            if (selection.Length == 0)
+            {
+                if (note.Length > 0) _shaderPackStatus = note;
+                return;
+            }
+        }
 
         if (_nativeShaders == null)
         {
@@ -326,6 +334,35 @@ public sealed unsafe partial class VulkanDevice
         if (string.IsNullOrEmpty(searchDirectory)) return null;
         string candidate = System.IO.Path.Combine(searchDirectory, "shaderpacks", selection);
         return System.IO.Directory.Exists(candidate) ? candidate : null;
+    }
+
+    /// <summary>
+    /// The only pack installed under <c>shaderpacks/</c>, when exactly one is present: the
+    /// development selection until the Options menu carries the pack list. Several packs need an
+    /// explicit <see cref="NativeShaderLibrary.PackVariable" />, so none is activated and the note
+    /// says so.
+    /// </summary>
+    private static (string Selection, string Note) SingleInstalledPack(string? searchDirectory)
+    {
+        if (string.IsNullOrEmpty(searchDirectory)) return ("", "");
+        string root = System.IO.Path.Combine(searchDirectory, "shaderpacks");
+        string[] packs;
+        try
+        {
+            if (!System.IO.Directory.Exists(root)) return ("", "");
+            packs = System.IO.Directory.GetDirectories(root);
+        }
+        catch (Exception error) when (error is System.IO.IOException or UnauthorizedAccessException)
+        {
+            return ("", "shaderpacks/ is unreadable: " + error.Message);
+        }
+        if (packs.Length == 1) return (System.IO.Path.GetFileName(packs[0]), "");
+        if (packs.Length > 1)
+        {
+            return ("", packs.Length + " shader packs are installed; set " + NativeShaderLibrary.PackVariable +
+                " to one of them until the Options menu carries the pack list");
+        }
+        return ("", "");
     }
 
     /// <summary>Logs, once per program, that a pack's program could not serve a link and the shipped program is used.</summary>
