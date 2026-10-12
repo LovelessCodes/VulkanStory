@@ -205,12 +205,29 @@ internal sealed unsafe class GraphicsPipelineCache : IDisposable
         public required PrimitiveTopology Topology { get; init; }
     }
 
-    /// <summary>Pipeline identity for a failure message: the program and the state that keyed it.</summary>
+    /// <summary>Pipeline identity for a failure message: the program, the state that keyed it, the
+    /// attributes bound and the inputs the program declares.</summary>
     /// <remarks>A driver can refuse one variant - MoltenVK failing an MSL compile, for one - while every
-    /// other variant succeeds, and the caller's stack does not say which. The message must.</remarks>
-    private static string Describe(PipelineRequest request) =>
-        " (program " + request.Program.ProgramId + ", topology " + request.Topology +
-        ", polygon " + request.PolygonMode + ", blends " + request.Blend.Length + ")";
+    /// other variant succeeds, and the caller's stack does not say which. The message must, because a
+    /// format/declaration mismatch cannot be diagnosed from the program id alone.</remarks>
+    private static string Describe(PipelineRequest request)
+    {
+        var text = new System.Text.StringBuilder(" (program ");
+        text.Append(request.Program.ProgramId).Append(", topology ").Append(request.Topology)
+            .Append(", polygon ").Append(request.PolygonMode).Append(", blends ").Append(request.Blend.Length)
+            .Append("; attributes");
+        foreach (VertexAttribute attribute in request.VertexLayout.Attributes)
+        {
+            text.Append(" [loc ").Append(attribute.Location).Append(' ').Append(attribute.Format).Append(']');
+        }
+        text.Append("; declared");
+        foreach (VertexInputSlot input in request.Program.Interface.VertexInputs)
+        {
+            text.Append(" [loc ").Append(input.Location).Append(' ').Append(input.Name)
+                .Append(':').Append(input.Type.Name).Append(']');
+        }
+        return text.Append(')').ToString();
+    }
 
     /// <summary>
     /// The attribute format this program's declared input type can read.
@@ -219,7 +236,8 @@ internal sealed unsafe class GraphicsPipelineCache : IDisposable
     /// attribute format is only readable by an integer input and the driver refuses the pipeline
     /// otherwise (MoltenVK: "Vertex attribute ... of type float cannot be read using
     /// MTLAttributeFormatInt"). The scaled forms convert by value, exactly like GL's
-    /// unnormalized integer conversion. Inputs the program does not declare keep the mesh format.
+    /// unnormalized integer conversion. Inputs the program does not declare keep a float-readable
+    /// form of the mesh format.
     /// </summary>
     private static Format AttributeFormat(VertexAttribute attribute, ProgramInterfaceLayout program)
     {
@@ -230,10 +248,29 @@ internal sealed unsafe class GraphicsPipelineCache : IDisposable
             bool integer = name is "int" or "uint" ||
                 name.StartsWith("ivec", StringComparison.Ordinal) ||
                 name.StartsWith("uvec", StringComparison.Ordinal);
-            return integer ? attribute.Format : ToScaled(attribute.Format);
+            return integer ? IntegerForm(attribute.Format) : ToScaled(attribute.Format);
         }
-        return attribute.Format;
+        // An input the program does not declare is never integer-typed as far as the shader
+        // is concerned, and Metal validates the binding anyway; keep it readable as float.
+        return ToScaled(attribute.Format);
     }
+
+    /// <summary>
+    /// The integer form of an attribute format for an integer-typed input.
+    ///
+    /// VS binds integer custom parts with a float-shaped layout entry when the part's conversion
+    /// is not Integer, because GL converted those values by value for float inputs. The ported
+    /// programs instead declare the input as int and convert explicitly, so the pipeline format
+    /// must be the integer format the bytes actually hold; the bit pattern is the raw value.
+    /// </summary>
+    private static Format IntegerForm(Format format) => format switch
+    {
+        Format.R32Sfloat => Format.R32Sint,
+        Format.R32G32Sfloat => Format.R32G32Sint,
+        Format.R32G32B32Sfloat => Format.R32G32B32Sint,
+        Format.R32G32B32A32Sfloat => Format.R32G32B32A32Sint,
+        _ => format,
+    };
 
     /// <summary>The scaled (convert-by-value) form of an integer attribute format, or the format itself.</summary>
     /// <remarks>Vulkan defines scaled forms for 8- and 16-bit integers only; a 32-bit integer
