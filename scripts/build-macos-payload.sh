@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# Builds the macOS arm64 runtime payload from this checkout into a fresh directory.
+# Usage: bash build-macos-payload.sh <output-directory> [Debug|Release]
+# Requires the .NET SDK, a developer-local Directory.Build.local.props pointing at an
+# official client (compile-time references only), python3, and a Vulkan header root
+# (VULKAN_SDK, or the Homebrew prefix) when the VMA bridge has not been built yet.
+# Stages payload, proofs and layout; it never installs and never launches the game.
+set -euo pipefail
+out="${1:?usage: build-macos-payload.sh <output-directory> [Debug|Release]}"
+configuration="${2:-Release}"
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo="$(cd "$here/.." && pwd)"
+rid=osx-arm64
+profile=vs-1.22.7-osx-arm64
+
+if [ "$(uname -s)" != Darwin ] || [ "$(uname -m)" != arm64 ]; then
+    echo 'The macOS payload builds on Darwin arm64 only.' >&2
+    exit 2
+fi
+if [ ! -f "$repo/Directory.Build.local.props" ]; then
+    echo 'Copy Directory.Build.local.props.example to Directory.Build.local.props and point VintageStoryPath at an official client.' >&2
+    exit 2
+fi
+if [ -e "$out" ] && [ -n "$(ls -A "$out" 2>/dev/null || true)" ]; then
+    echo "Output directory is not fresh: $out" >&2
+    exit 2
+fi
+
+bridge="$repo/artifacts/native-vma/$configuration/$rid/libVulkanStoryVma.dylib"
+if [ ! -f "$bridge" ]; then
+    sdk_root="${VULKAN_SDK:-$(brew --prefix 2>/dev/null || true)}"
+    if [ -z "$sdk_root" ] || [ ! -f "$sdk_root/include/vulkan/vulkan.h" ]; then
+        echo 'Set VULKAN_SDK (or install Homebrew vulkan-headers) so the VMA bridge can be built.' >&2
+        exit 2
+    fi
+    bash "$repo/native/vma/build.sh" "$repo/artifacts/native-vma/$configuration/$rid" "$sdk_root" "$configuration"
+fi
+
+managed="$out/VulkanStory/managed"
+native="$out/VulkanStory/native/$rid"
+publish() {
+    dotnet publish "$1" -c "$configuration" -r "$rid" --self-contained false -o "$2" \
+        -p:DebugType=none -p:GenerateDocumentationFile=false >/dev/null
+}
+
+mkdir -p "$managed" "$native" "$out/Mods/vulkanstory" "$out/Mods/vulkanstoryinput"
+publish "$repo/src/VulkanStory.Bootstrap/VulkanStory.Bootstrap.csproj" "$managed"
+publish "$repo/src/VulkanStory.Game/VulkanStory.Game.csproj" "$managed"
+publish "$repo/src/VulkanStory.Mod/VulkanStory.Mod.csproj" "$out/Mods/vulkanstory"
+publish "$repo/src/VulkanStory.Input.Companion/VulkanStory.Input.Companion.csproj" "$out/Mods/vulkanstoryinput"
+cp -f "$repo/src/VulkanStory.Mod/modinfo.json" "$out/Mods/vulkanstory/modinfo.json"
+cp -f "$repo/src/VulkanStory.Input.Companion/modinfo.json" "$out/Mods/vulkanstoryinput/modinfo.json"
+cp -f "$repo/packaging/loader.ini" "$out/VulkanStory/loader.ini"
+
+# The deploy layout keeps native runtimes out of managed/, in the RID directory.
+for library in libSDL3.dylib libshaderc_shared.dylib; do
+    if [ -f "$managed/$library" ]; then mv -f "$managed/$library" "$native/$library"; fi
+done
+cp -f "$bridge" "$native/libVulkanStoryVma.dylib"
+find "$managed" "$out/Mods" -name '*.pdb' -delete
+
+python3 - "$out" "$profile" "$rid" <<'PY'
+import hashlib, json, os, sys
+out, profile, rid = sys.argv[1], sys.argv[2], sys.argv[3]
+files = {}
+for root, _, names in os.walk(out):
+    for name in names:
+        path = os.path.join(root, name)
+        relative = os.path.relpath(path, out)
+        if relative == 'VulkanStory/package.json':
+            continue
+        digest = hashlib.sha256()
+        with open(path, 'rb') as stream:
+            for chunk in iter(lambda: stream.read(1 << 20), b''):
+                digest.update(chunk)
+        files[relative] = digest.hexdigest().upper()
+record = {'schema': 1, 'product': 'VulkanStory', 'profile': profile, 'rid': rid,
+          'acceptance': 'unverified', 'files': dict(sorted(files.items()))}
+with open(os.path.join(out, 'VulkanStory/package.json'), 'w') as stream:
+    json.dump(record, stream, indent=2)
+    stream.write('\n')
+print(f'package.json: {len(files)} files, profile {profile}')
+PY
+
+echo "vulkanstory-payload: staged $out"

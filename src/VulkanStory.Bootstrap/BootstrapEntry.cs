@@ -32,9 +32,13 @@ internal static class BootstrapEntry
             bool clientEntry = Assembly.GetEntryAssembly()?.GetName().Name == "Vintagestory";
             bool harness = Environment.GetEnvironmentVariable("VULKANSTORY_HEADLESS") == "1" &&
                 string.Equals(executable, windows ? "dotnet.exe" : "dotnet", processComparison);
+            // macOS activation renames the apphost to Vintagestory.bin and puts a hook
+            // wrapper under the canonical name, so the wrapper's exec reports the .bin.
+            bool clientProcess = string.Equals(executable, windows ? "Vintagestory.exe" : "Vintagestory", processComparison) ||
+                (macos && string.Equals(executable, "Vintagestory.bin", StringComparison.Ordinal));
             if ((!windows && !linux && !macos) ||
                 RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64) || !clientEntry ||
-                (!string.Equals(executable, windows ? "Vintagestory.exe" : "Vintagestory", processComparison) && !harness))
+                (!clientProcess && !harness))
             {
                 SetStatus(trace, "bypassed", "Not a supported desktop client process.");
                 return;
