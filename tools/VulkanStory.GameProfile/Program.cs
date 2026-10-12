@@ -24,9 +24,10 @@ try
     using JsonDocument profile = JsonDocument.Parse(File.ReadAllText(profilePath));
     string profileId = profile.RootElement.GetProperty("id").GetString() ??
         throw new InvalidDataException("Profile id is missing.");
-    if (profileId != StartupIlProfile.Id ||
-        profile.RootElement.GetProperty("files").GetProperty("VintagestoryLib.dll").GetString() != StartupIlProfile.GameAssemblySha256)
-        throw new InvalidDataException("File profile and embedded startup IL profile do not agree.");
+    // The file profile is per platform; the embedded startup IL profile is per game
+    // assembly, and 1.22.7 ships the same client assembly on every desktop platform.
+    if (profile.RootElement.GetProperty("files").GetProperty("VintagestoryLib.dll").GetString() != StartupIlProfile.GameAssemblySha256)
+        throw new InvalidDataException("File profile and embedded startup IL profile target different game assemblies.");
     foreach (JsonProperty file in profile.RootElement.GetProperty("files").EnumerateObject())
     {
         string path = Path.Combine(gameDirectory, file.Name.Replace('/', Path.DirectorySeparatorChar));

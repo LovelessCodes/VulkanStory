@@ -27,14 +27,16 @@ internal static class BootstrapEntry
             string? executable = Path.GetFileName(Environment.ProcessPath);
             bool windows = OperatingSystem.IsWindows();
             bool linux = OperatingSystem.IsLinux();
+            bool macos = OperatingSystem.IsMacOS();
             StringComparison processComparison = windows ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
             bool clientEntry = Assembly.GetEntryAssembly()?.GetName().Name == "Vintagestory";
             bool harness = Environment.GetEnvironmentVariable("VULKANSTORY_HEADLESS") == "1" &&
                 string.Equals(executable, windows ? "dotnet.exe" : "dotnet", processComparison);
-            if ((!windows && !linux) || RuntimeInformation.ProcessArchitecture != Architecture.X64 || !clientEntry ||
+            if ((!windows && !linux && !macos) ||
+                RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64) || !clientEntry ||
                 (!string.Equals(executable, windows ? "Vintagestory.exe" : "Vintagestory", processComparison) && !harness))
             {
-                SetStatus(trace, "bypassed", "Not a supported Windows/Linux x64 client process.");
+                SetStatus(trace, "bypassed", "Not a supported desktop client process.");
                 return;
             }
 
@@ -44,7 +46,10 @@ internal static class BootstrapEntry
                 return;
             }
             string managedDirectory = Path.GetDirectoryName(ownPath)!;
-            string profileId = windows ? "vs-1.22.7-win-x64" : "vs-1.22.7-linux-x64";
+            string profileId = windows ? "vs-1.22.7-win-x64" :
+                macos ? (RuntimeInformation.ProcessArchitecture == Architecture.Arm64
+                    ? "vs-1.22.7-osx-arm64" : "vs-1.22.7-osx-x64") :
+                "vs-1.22.7-linux-x64";
             GameProfile profile = GameProfile.Load(Path.Combine(managedDirectory, "profiles", profileId + ".json"));
             if (profile.Id != profileId) throw new InvalidDataException("Game profile does not match the selected platform.");
             if (Environment.Version.Major != profile.RuntimeMajor)
@@ -78,7 +83,7 @@ internal static class BootstrapEntry
     }
 
     /// <summary>Reads the bounded package-local enable switch before integration or graphics dependencies load.</summary>
-    /// <remarks>Missing configuration preserves the native Windows loader's enabled default; Linux installation requires the file.</remarks>
+    /// <remarks>Missing configuration preserves the native Windows loader's enabled default; the script-activated platforms require the file.</remarks>
     private static bool IsBootstrapEnabled(string path)
     {
         if (!File.Exists(path)) return OperatingSystem.IsWindows();

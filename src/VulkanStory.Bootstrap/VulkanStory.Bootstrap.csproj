@@ -3,5 +3,6 @@
     <InternalsVisibleTo Include="VulkanStory.Bootstrap.Tests" />
     <Content Include="../../profiles/vs-1.22.7-win-x64.json" Link="profiles/vs-1.22.7-win-x64.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../profiles/vs-1.22.7-linux-x64.json" Link="profiles/vs-1.22.7-linux-x64.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../profiles/vs-1.22.7-osx-arm64.json" Link="profiles/vs-1.22.7-osx-arm64.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
