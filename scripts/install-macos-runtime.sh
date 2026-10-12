@@ -35,6 +35,13 @@ WRAPPER = b'''#!/bin/sh
 # Installed by install-macos-runtime.sh. Runs the original apphost with the managed
 # startup hook armed for this process only; removed by remove-macos-runtime.sh.
 app_dir="$(cd -- "$(dirname -- "$0")" && pwd)"
+# LaunchServices gives the app a minimal PATH; the in-game capture command
+# launches the packaged harness with `dotnet`.
+case ":$PATH:" in
+    *":/usr/local/share/dotnet:"*) ;;
+    *) PATH="${PATH:+$PATH:}/usr/local/share/dotnet" ;;
+esac
+export PATH
 hook="$app_dir/VulkanStory/managed/VulkanStory.Bootstrap.dll"
 if [ -n "${DOTNET_STARTUP_HOOKS:-}" ]; then
     DOTNET_STARTUP_HOOKS="$hook:$DOTNET_STARTUP_HOOKS"
@@ -129,6 +136,8 @@ for relative in copies:
 
 if not activated:
     os.rename(wrapper, renamed)
+if wrapper.read_bytes() != WRAPPER:
+    # Refresh an activation installed by an older revision of this script.
     wrapper.write_bytes(WRAPPER)
     os.chmod(wrapper, 0o755)
 

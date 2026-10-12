@@ -43,11 +43,14 @@ publish() {
         -p:DebugType=none -p:GenerateDocumentationFile=false >/dev/null
 }
 
-mkdir -p "$managed" "$native" "$out/Mods/vulkanstory" "$out/Mods/vulkanstoryinput"
+mkdir -p "$managed" "$native" "$out/Mods/vulkanstory" "$out/Mods/vulkanstoryinput" "$out/VulkanStory/tools/performance"
 publish "$repo/src/VulkanStory.Bootstrap/VulkanStory.Bootstrap.csproj" "$managed"
 publish "$repo/src/VulkanStory.Game/VulkanStory.Game.csproj" "$managed"
 publish "$repo/src/VulkanStory.Mod/VulkanStory.Mod.csproj" "$out/Mods/vulkanstory"
 publish "$repo/src/VulkanStory.Input.Companion/VulkanStory.Input.Companion.csproj" "$out/Mods/vulkanstoryinput"
+# The external capture harness the in-game `.vulkanstory profile` command launches.
+dotnet publish "$repo/tools/VulkanStory.PerformanceHarness/VulkanStory.PerformanceHarness.csproj" -c "$configuration" \
+    --self-contained false -o "$out/VulkanStory/tools/performance" -p:DebugType=none >/dev/null
 cp -f "$repo/src/VulkanStory.Mod/modinfo.json" "$out/Mods/vulkanstory/modinfo.json"
 cp -f "$repo/src/VulkanStory.Input.Companion/modinfo.json" "$out/Mods/vulkanstoryinput/modinfo.json"
 cp -f "$repo/packaging/loader.ini" "$out/VulkanStory/loader.ini"
