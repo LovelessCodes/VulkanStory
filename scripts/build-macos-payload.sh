@@ -68,6 +68,32 @@ for library in libSDL3.dylib libshaderc_shared.dylib; do
     if [ -f "$managed/$library" ]; then mv -f "$managed/$library" "$native/$library"; fi
 done
 cp -f "$bridge" "$native/libVulkanStoryVma.dylib"
+
+# Self-contained Vulkan runtime: the Khronos loader and MoltenVK with their
+# notices. The ICD manifest keeps a manifest-relative library_path, which is how
+# the loader resolves the implementation. A release build should take both from
+# pinned sources instead of the local Homebrew installation.
+loader_prefix="$(brew --prefix vulkan-loader 2>/dev/null || true)"
+moltenvk_prefix="$(brew --prefix molten-vk 2>/dev/null || true)"
+if [ -z "$loader_prefix" ] || [ -z "$moltenvk_prefix" ]; then
+    echo 'The payload needs the Homebrew vulkan-loader and molten-vk formulae (or pinned equivalents).' >&2
+    exit 2
+fi
+cp -f "$loader_prefix/lib/libvulkan.1.dylib" "$native/libvulkan.1.dylib"
+cp -f "$moltenvk_prefix/lib/libMoltenVK.dylib" "$native/libMoltenVK.dylib"
+cat > "$native/MoltenVK_icd.json" <<'JSON'
+{
+    "file_format_version" : "1.0.0",
+    "ICD": {
+        "library_path": "libMoltenVK.dylib",
+        "api_version" : "1.4.0",
+        "is_portability_driver" : true
+    }
+}
+JSON
+mkdir -p "$out/VulkanStory/licenses/native"
+cp -f "$loader_prefix/LICENSE.txt" "$out/VulkanStory/licenses/native/vulkan-loader-LICENSE.txt"
+cp -f "$moltenvk_prefix/LICENSE" "$out/VulkanStory/licenses/native/moltenvk-LICENSE.txt"
 find "$managed" "$out/Mods" -name '*.pdb' -delete
 
 python3 - "$out" "$profile" "$rid" <<'PY'

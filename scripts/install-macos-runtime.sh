@@ -130,13 +130,27 @@ if receipt_path.is_file():
     owned = receipt.get('files') or {}
 
 copies = []
+# The ICD manifest is installed with an absolute MoltenVK path: the loader resolves a
+# bare library name through the system search paths, not the manifest directory. Its
+# installed form is derived here so the ownership check accepts our own earlier install
+# even when the receipt predates the rewrite.
+manifest_relative = 'VulkanStory/native/osx-arm64/MoltenVK_icd.json'
+derived_expected = {}
+derived_content = {}
+if manifest_relative in manifest:
+    icd = json.loads((payload / manifest_relative).read_text())
+    icd['ICD']['library_path'] = str(app / 'VulkanStory/native/osx-arm64/libMoltenVK.dylib')
+    derived_content[manifest_relative] = json.dumps(icd, indent=2) + '\n'
+    derived_expected[manifest_relative] = hashlib.sha256(
+        derived_content[manifest_relative].encode()).hexdigest().upper()
+
 for relative, expected in manifest.items():
     target = app / relative
     if target.is_symlink():
         fail('refusing to replace a symlink: ' + relative)
     if target.exists():
         current = digest(target)
-        if owned.get(relative) != current:
+        if owned.get(relative) != current and derived_expected.get(relative) != current:
             fail('refusing to overwrite a file this installer does not own: ' + relative)
         if current == expected.upper():
             continue
@@ -156,6 +170,11 @@ for relative in copies:
     shutil.copyfile(payload / relative, target)
     os.chmod(target, 0o644)
 
+# Write the derived forms recorded above (same bytes that were hashed there).
+derived = dict(derived_expected)
+for relative, content in derived_content.items():
+    (app / relative).write_text(content)
+
 if not activated:
     os.rename(wrapper, renamed)
 if wrapper.read_bytes() != WRAPPER:
@@ -166,6 +185,7 @@ if wrapper.read_bytes() != WRAPPER:
 files = dict(owned)
 for relative, expected in manifest.items():
     files[relative] = expected.upper()
+files.update(derived)
 receipt = {
     'schema': 1,
     'product': 'VulkanStory',

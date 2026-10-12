@@ -70,7 +70,7 @@ public static class SdlVulkanLibrary
             foreach (string name in LibraryNames)
             {
                 string candidate = Path.Combine(directory, name);
-                if (File.Exists(candidate)) return candidate;
+                if (File.Exists(candidate)) return Use(candidate);
             }
         }
         foreach (string directory in StandardDirectories)
@@ -78,10 +78,33 @@ public static class SdlVulkanLibrary
             foreach (string name in LibraryNames)
             {
                 string candidate = Path.Combine(directory, name);
-                if (File.Exists(candidate)) return candidate;
+                if (File.Exists(candidate)) return Use(candidate);
             }
         }
         return null;
+    }
+
+    /// <summary>Selects the runtime and points the loader at a packaged ICD manifest beside it.</summary>
+    /// <remarks>A payload carries MoltenVK next to its manifest so the loader stays off the machine's own
+    /// registry; an existing VK_ICD_FILENAMES or VK_DRIVER_FILES choice always wins.</remarks>
+    private static string Use(string path)
+    {
+        string? directory = Path.GetDirectoryName(path);
+        if (directory is not null)
+        {
+            string manifest = Path.Combine(directory, "MoltenVK_icd.json");
+            if (File.Exists(manifest))
+            {
+                foreach (string variable in new[] { "VK_ICD_FILENAMES", "VK_DRIVER_FILES" })
+                {
+                    if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable(variable)))
+                    {
+                        Environment.SetEnvironmentVariable(variable, manifest);
+                    }
+                }
+            }
+        }
+        return path;
     }
 
     /// <summary>macOS runtime names in preference order: the loader first, the portability implementation second.</summary>
