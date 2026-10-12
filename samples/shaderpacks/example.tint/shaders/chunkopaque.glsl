@@ -325,8 +325,10 @@ void main()
 	outColor = applyFogAndShadowFromBrightness(texColor, clamp(fogAmount - 50*murkiness, 0, 1), min(b, nb), worldPos.xyz);
 
 #if PACK_TINT > 0
-	// The example change: a faint warm tint over lit terrain. Replace with anything.
-	outColor.rgb *= vec3(1.0, 0.97, 0.92);
+	// The example change: a heavy warm duotone over lit terrain, so the pack is plainly
+	// visible in any world view. Replace with anything.
+	vec3 packMono = vec3(dot(outColor.rgb, vec3(0.299, 0.587, 0.114)));
+	outColor.rgb = mix(outColor.rgb, packMono * vec3(1.15, 0.95, 0.65), 0.75);
 #endif
 
 	float glow = 0;
