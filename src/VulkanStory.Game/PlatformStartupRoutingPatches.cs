@@ -207,5 +207,15 @@ internal static class PlatformStartupRoutingPatches
     private static bool DebugMode(ClientPlatformWindows __instance, bool __0)
     { if (!TrySession(__instance, out var session)) return true; Debug(__instance) = __0; session.Device.DebugMode = __0; return false; }
     private static void Exit(ClientPlatformWindows __instance)
-    { if (TrySession(__instance, out var session)) session.Input.RequestWindowExit(); }
+    { if (TrySessionForShutdown(__instance, out var session)) session.Input.RequestWindowExit(); }
+
+    /// <summary>Session for teardown paths, where a missing session means the renderer already stopped.</summary>
+    /// <remarks>The committed-routing invariant throws in live paths; during crash handling a gone session
+    /// is expected, and throwing there turns a handled crash into an abort.</remarks>
+    private static bool TrySessionForShutdown(ClientPlatformWindows platform, out GameRenderSession session)
+    {
+        session = null!;
+        if (runtime?.HasCommitted != true) return false;
+        return runtime.TrySession(platform, out session);
+    }
 }

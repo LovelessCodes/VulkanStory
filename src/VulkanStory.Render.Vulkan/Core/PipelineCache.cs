@@ -212,6 +212,44 @@ internal sealed unsafe class GraphicsPipelineCache : IDisposable
         " (program " + request.Program.ProgramId + ", topology " + request.Topology +
         ", polygon " + request.PolygonMode + ", blends " + request.Blend.Length + ")";
 
+    /// <summary>
+    /// The attribute format this program's declared input type can read.
+    ///
+    /// GL converts integer vertex data for a float input; Metal and Vulkan do not: an integer
+    /// attribute format is only readable by an integer input and the driver refuses the pipeline
+    /// otherwise (MoltenVK: "Vertex attribute ... of type float cannot be read using
+    /// MTLAttributeFormatInt"). The scaled forms convert by value, exactly like GL's
+    /// unnormalized integer conversion. Inputs the program does not declare keep the mesh format.
+    /// </summary>
+    private static Format AttributeFormat(VertexAttribute attribute, ProgramInterfaceLayout program)
+    {
+        foreach (VertexInputSlot input in program.VertexInputs)
+        {
+            if (input.Location != (int)attribute.Location) continue;
+            string name = input.Type.Name;
+            bool integer = name is "int" or "uint" ||
+                name.StartsWith("ivec", StringComparison.Ordinal) ||
+                name.StartsWith("uvec", StringComparison.Ordinal);
+            return integer ? attribute.Format : ToScaled(attribute.Format);
+        }
+        return attribute.Format;
+    }
+
+    /// <summary>The scaled (convert-by-value) form of an integer attribute format, or the format itself.</summary>
+    /// <remarks>Vulkan defines scaled forms for 8- and 16-bit integers only; a 32-bit integer
+    /// attribute read as float cannot be fixed here and would need its data converted.</remarks>
+    private static Format ToScaled(Format format) => format switch
+    {
+        Format.R8Sint => Format.R8Sscaled, Format.R8Uint => Format.R8Uscaled,
+        Format.R8G8Sint => Format.R8G8Sscaled, Format.R8G8Uint => Format.R8G8Uscaled,
+        Format.R8G8B8Sint => Format.R8G8B8Sscaled, Format.R8G8B8Uint => Format.R8G8B8Uscaled,
+        Format.R8G8B8A8Sint => Format.R8G8B8A8Sscaled, Format.R8G8B8A8Uint => Format.R8G8B8A8Uscaled,
+        Format.R16Sint => Format.R16Sscaled, Format.R16Uint => Format.R16Uscaled,
+        Format.R16G16Sint => Format.R16G16Sscaled, Format.R16G16Uint => Format.R16G16Uscaled,
+        Format.R16G16B16A16Sint => Format.R16G16B16A16Sscaled, Format.R16G16B16A16Uint => Format.R16G16B16A16Uscaled,
+        _ => format,
+    };
+
     /// <summary>The pipeline for <paramref name="key" />, joining its prewarm or compiling on this thread on a miss.</summary>
     public Pipeline Get(PipelineKey key, PipelineRequest request)
     {
@@ -953,7 +991,7 @@ internal sealed unsafe class GraphicsPipelineCache : IDisposable
             {
                 Location = attribute.Location,
                 Binding = attribute.Binding,
-                Format = attribute.Format,
+                Format = AttributeFormat(attribute, request.Program.Interface),
                 Offset = attribute.Offset,
             };
         }
