@@ -30,16 +30,19 @@ internal sealed record GameProfile(int Schema, string Id, string GameVersion, in
 
     /// <summary>Hashes every named official game file and refuses mismatches or paths outside the game root.</summary>
     /// <param name="gameDirectory">Official installation root against which relative profile paths are resolved.</param>
+    /// <param name="redirects">Optional profile-file replacements, such as an apphost an installer renamed.</param>
     /// <exception cref="InvalidDataException">A path escapes the root or a file does not match its recorded digest.</exception>
-    internal void VerifyFiles(string gameDirectory)
+    internal void VerifyFiles(string gameDirectory, IReadOnlyDictionary<string, string>? redirects = null)
     {
         string root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(gameDirectory)) + Path.DirectorySeparatorChar;
         foreach ((string relative, string expected) in Files)
         {
-            string path = Path.GetFullPath(Path.Combine(root, relative));
-            if (Path.IsPathRooted(relative) || !path.StartsWith(root,
+            string target = redirects is not null && redirects.TryGetValue(relative, out string? redirected)
+                ? redirected : relative;
+            string path = Path.GetFullPath(Path.Combine(root, target));
+            if (Path.IsPathRooted(target) || !path.StartsWith(root,
                     OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
-                throw new InvalidDataException($"Profile path is outside the game directory: {relative}");
+                throw new InvalidDataException($"Profile path is outside the game directory: {target}");
             using FileStream file = File.OpenRead(path);
             string actual = Convert.ToHexString(SHA256.HashData(file));
             if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))

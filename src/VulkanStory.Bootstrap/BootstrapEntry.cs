@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Loader;
+using System.Text.Json;
 
 namespace VulkanStory.Bootstrap;
 
@@ -58,7 +59,7 @@ internal static class BootstrapEntry
             if (profile.Id != profileId) throw new InvalidDataException("Game profile does not match the selected platform.");
             if (Environment.Version.Major != profile.RuntimeMajor)
                 throw new InvalidDataException($"Expected .NET {profile.RuntimeMajor}, found {Environment.Version}.");
-            profile.VerifyFiles(gameDirectory);
+            profile.VerifyFiles(gameDirectory, ApphostRedirects(gameDirectory));
             trace.Write("managed.profile.accepted", profile.Id);
 
             dependencies = new BootstrapDependencies(managedDirectory, gameDirectory, trace.Write);
@@ -111,6 +112,29 @@ internal static class BootstrapEntry
             enabled = value != 0;
         }
         return enabled;
+    }
+
+    /// <summary>Reads the install receipt for an apphost an installer renamed, for the profile's apphost entry.</summary>
+    /// <remarks>Only the receipt this project's installer writes can redirect an entry, and the digest still decides.
+    /// A missing, oversized or unreadable receipt leaves the plain profile names in charge.</remarks>
+    private static IReadOnlyDictionary<string, string>? ApphostRedirects(string gameDirectory)
+    {
+        try
+        {
+            string receiptPath = Path.Combine(gameDirectory, "VulkanStory", "install.json");
+            if (!File.Exists(receiptPath) || new FileInfo(receiptPath).Length > 64 * 1024) return null;
+            using FileStream file = File.OpenRead(receiptPath);
+            using JsonDocument receipt = JsonDocument.Parse(file);
+            if (!receipt.RootElement.TryGetProperty("activation", out JsonElement activation) ||
+                !activation.TryGetProperty("apphost", out JsonElement apphost) ||
+                apphost.GetString() is not { Length: > 0 } renamed ||
+                !string.Equals(Path.GetFileName(renamed), renamed, StringComparison.Ordinal)) return null;
+            return new Dictionary<string, string>(StringComparer.Ordinal) { ["Vintagestory"] = renamed };
+        }
+        catch (Exception error) when (error is IOException or JsonException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     /// <summary>Publishes the bootstrap state for the late mod entry and appends its diagnostic marker.</summary>
