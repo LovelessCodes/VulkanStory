@@ -1,7 +1,13 @@
 # Shader packs
 
-Design for **PACK-01** in the [roadmap](ROADMAP.md). Status: proposal, nothing
-implemented. It builds on [rendering](rendering.md), the
+Design for **PACK-01** in the [roadmap](ROADMAP.md). Status: contract 1 is
+implemented as the first slice - pack discovery, the `pack.json` manifest, option
+defaults as defines, per-program substitution through the shipped library, and
+per-slot fallback (`ShaderPackManifest`, `ShaderPackLibrary`, and the pack branch
+in `VulkanDevice.LinkProgram`; `samples/shaderpacks/example.tint` proves it).
+Declared passes, pack targets, pack textures, the Options UI and the
+OptiFine/Iris adapter are not implemented; the sections below say so where it
+matters. The design builds on [rendering](rendering.md), the
 [mod integration](mod-integration.md) pass API and the
 [architecture](architecture.md) ownership rules.
 
@@ -30,23 +36,24 @@ flowchart TD
     C --> D[AO: SSAO or GTAO - renderer-owned]
     D --> E[TAA or vendor reconstruction - renderer-owned]
     E --> F[Post chain: godrays, bloom, colorgrade, luma - replaceable tier 2]
-    F --> G[Pack declared passes: AfterPostProcessing, AfterFinalComposition]
+    F --> G[Pack declared passes: AfterPostProcessing, AfterFinalComposition - contract 1.1]
     G --> H[UI composition, final composite, presentation - renderer-owned]
 ```
 
 Program identity is the game's shader asset name (`ShaderProgram.PassName`), the
 same key `NativeShaderLibrary` and `ShaderOverridePolicy` already use; the
 existing `sceneMotionWriters` list is the precedent for certifying a program by
-name. A pack replaces one program at a time or none at all.
+name. A pack replaces one program at a time or none at all. Contract 1 resolves
+any slot name the shipped manifest carries; the tiers below say which slots the
+pipeline serves well today, and the renderer-owned row is the hard boundary.
 
 ## Contract
 
 ### A. Program slots
 
-Tier 1 and tier 2 slots exist today as native programs. A pack entry for a slot
-must compile against that slot's interface (validated by reflection before
-activation) and must honor the slot's mandatory outputs, including motion when
-TAA is active.
+Tier 1 and tier 2 slots exist today as native programs. A pack's source is
+reflected and checked against the set convention when it builds, and it must
+honor the slot's mandatory outputs, including motion when TAA is active.
 
 | Tier | Slot (program name) | Writes |
 | --- | --- | --- |
@@ -110,68 +117,74 @@ gated on REN-09 (framebuffer rebuild instability) and on the OIT decision below.
 
 ### D. Options
 
-The manifest declares user options; the runtime turns them into a `#define`
-prefix per program, so option changes are compile-time branches and the
-existing binary/pipeline cache key absorbs them.
+The manifest declares user options; the loader resolves them and splices them as
+a `#define` prefix into every source it compiles, so option-dependent branches
+are ordinary compile-time branches:
 
 ```json
 {
-  "id": "example.pack",
-  "name": "Example Pack",
   "contract": 1,
-  "minRuntime": "0.1.4",
+  "id": "example.tint",
+  "name": "Example tint",
+  "version": "0.1.0",
   "options": [
-    { "id": "SHADOWS", "type": "bool", "default": true },
+    { "id": "PACK_TINT", "type": "bool", "default": true },
     { "id": "QUALITY", "type": "choice", "values": ["low", "high"], "default": "high" }
   ],
-  "profiles": { "performance": { "SHADOWS": false, "QUALITY": "low" } },
-  "targets": [
-    { "name": "ssr", "format": "rgba16f", "scale": 1.0, "clear": true }
-  ],
-  "programs": {
-    "chunkopaque": { "vertex": "shaders/chunkopaque.vert", "fragment": "shaders/chunkopaque.frag" },
-    "scene-ssao": { "fragment": "shaders/ssao.frag" }
-  },
-  "passes": [
-    { "name": "ssr", "slot": "AfterPostProcessing", "reads": ["PrimaryColor", "PrimaryDepth"], "writes": ["ssr"], "program": "shaders/ssr.frag" }
+  "programs": [
+    { "slot": "chunkopaque", "source": "shaders/chunkopaque.glsl" }
   ]
 }
 ```
 
-Option values follow the existing settings persistence
-(`ModConfig/vulkanstory.json` uses the same switch/choice model via
-`RendererSettingsPanel`); the pack selection and its options appear in the
-Options menu like the renderer's own pages. `bool` becomes `0/1`, `choice`
-becomes the value index. Labels and tooltips come from an optional `.lang`
-file. Manifest names above are a sketch; final spellings are a review item.
+`bool` becomes `0` or `1`; `choice` becomes the value's index. A program source
+uses the same one-file-two-stages form as `shaders/native` (`OPTIMUM_VERTEX` /
+`OPTIMUM_FRAGMENT`). The loader refuses unknown manifest fields, so `profiles`,
+`targets` and `passes` are contract 1.1 work rather than silently ignored.
+
+Until options are selectable in the Options menu (implementation plan 3), the
+defaults apply; the sample pack documents how to compare values by editing a
+default. Persistence will follow the existing settings model
+(`ModConfig/vulkanstory.json`), with per-pack values stored beside the pack
+selection.
 
 ### E. Failures and fallback
 
 | Failure | Behavior |
 | --- | --- |
-| Invalid manifest, unsupported contract version, missing file | Pack refused at selection with the reason; previous pack stays active |
-| Program fails to compile/link or reflection mismatch | That slot falls back to its built-in program, pack stays loaded, error reported in-game and in the log (PACK-01 item 3) |
-| Option change fails to compile | The affected slot keeps its previous stage set; the new option value stays visible with an error marker |
-| Pack target allocation fails | Passes writing it are skipped; pack stays loaded |
-| Runtime device loss | Existing device-loss path; packs reload with the device |
+| Invalid manifest, unknown field, another contract version, bad path, missing file | The pack is refused with the reason in `NativeShaderStatus` and the log; no pack is active |
+| A declared slot is not a shipped program | The pack is refused; contract 1 replaces shipped programs, it does not add them |
+| A program source fails to build (compile, reflection or set convention) | That slot falls back to the shipped program at load, the pack stays loaded, and the log names the slot and the first error (PACK-01 item 3) |
+| Option change fails to compile | With the options UI (plan 3): the affected slot keeps its previous stage set and the new value stays visible with an error marker |
+| Pack target allocation fails | With pack targets (plan 2): passes writing it are skipped, the pack stays loaded |
+| Runtime device loss | Existing device-loss path; packs rebuild with the device |
 
-Activation is atomic at the frame boundary: the previous stage set keeps
-rendering until every replacement has linked, mirroring the asynchronous
-pipeline behavior the renderer already uses.
+Contract 1 builds the pack synchronously at device start, before any program
+links, so the world never sees a half-activated pack; hot reload, when it lands,
+stages replacements the same way: the previous stage set keeps rendering until
+the replacement has linked, mirroring the asynchronous pipeline behavior the
+renderer already uses.
 
 ### F. Loading and caching
 
-- Packs live under `<game data>/shaderpacks/`, as folders or zips; one is
-  selected at a time. Discovery and selection are renderer-level file work, so
-  they stay in `VulkanStory.Render.Vulkan`; game-side reporting and the Options
-  page follow the existing adapter/options split.
-- Hot reload: a command and a settings action rebuild the pack's pipelines
-  without restarting the world.
-- Cache identity extends the existing keys (`ShaderBinaryCache`, driver
-  pipeline cache under `<game cache>/vulkanstory-vulkan`) with pack id, pack
-  content hash, contract version and resolved option values.
-- `NativeShaders = false` disables the native path entirely; packs are
-  unavailable and reported as such.
+- A pack is a directory under `shaderpacks/` beside the runtime
+  (`<game>/VulkanStory/shaderpacks/<id>/`), or any absolute directory;
+  zips are not part of contract 1. `VULKANSTORY_VK_SHADER_PACK` names the pack's
+  id or directory; the Options menu carries the same selection once the pack UI
+  lands. One pack is active at a time.
+- The loader materializes a build tree under
+  `<shader cache>/vulkanstory-vulkan/shaderpacks/<id>-<hash>/`: the pack's
+  sources renamed to their slot names, plus the runtime's embedded copy of
+  `shaders/native/include`, then compiles it with `NativeShaderBuilder`, the
+  same compiler the offline tool and `VULKANSTORY_VK_SHADER_SOURCE` use. The
+  hash covers the manifest, resolved options, sources and compiler identity, so
+  a changed pack rebuilds and an unchanged one reuses its tree.
+- Hot reload and per-pack options in the Options menu are later steps (plan 3).
+- The pack's content hash joins the binary cache key when pack options become
+  user-selectable; the shipped pipeline cache already keys by program and
+  settings identity.
+- `NativeShaders = false` disables the native path entirely; a selected pack is
+  then reported as not loaded.
 
 ## Which layouts become public
 
@@ -240,15 +253,19 @@ hand-written pack proves the contract.
 
 ## Implementation plan
 
-1. **Contract + substitution.** Manifest parsing, pack discovery, program
-   replacement for tier 1 slots through the existing shader pipeline, option
-   defines, per-slot fallback, cache keys. Prove with one hand-written pack
-   replacing `chunkopaque` plus a post fragment, TAA on.
+1. **Contract + substitution (done, contract 1).** `pack.json` parsing and strict
+   validation, discovery under `shaderpacks/` beside the runtime, replacement of
+   any shipped slot through `NativeShaderBuilder` and the shipped library, option
+   defaults as spliced defines, per-slot fallback with refusal reasons, and a
+   content-hashed build tree under the shader cache. `samples/shaderpacks/example.tint`
+   proves it on `chunkopaque`; the mechanism is generic over shipped programs.
 2. **Declared pack passes and pack targets.** Extend the pass registry with
    pack-owned attachments; prove state restore, lifetime and read-after-write
    at `AfterPostProcessing`.
-3. **Options UI and hot reload.**
-4. **Tier 2 slot coverage and pack textures** (`noisetex`, custom textures).
+3. **Options UI and hot reload.** Per-pack options become selectable and
+   persisted; a command rebuilds the pack without restarting the world.
+4. **Post-slot coverage and pack textures** (`noisetex`, custom textures): a
+   pack-provided post fragment is the next proof after the tint sample.
 5. **OIT policy and broader slot coverage** if a pack needs them.
 6. **OptiFine/Iris adapter** as a separate milestone.
 

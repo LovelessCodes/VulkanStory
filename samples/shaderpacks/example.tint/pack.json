@@ -1,0 +1,12 @@
+{
+  "contract": 1,
+  "id": "example.tint",
+  "name": "Example tint",
+  "version": "0.1.0",
+  "options": [
+    { "id": "PACK_TINT", "type": "bool", "default": true }
+  ],
+  "programs": [
+    { "slot": "chunkopaque", "source": "shaders/chunkopaque.glsl" }
+  ]
+}

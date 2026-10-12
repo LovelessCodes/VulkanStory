@@ -108,6 +108,13 @@ internal sealed class NativeShaderLibrary
     /// <summary>A <c>sources/shaders-vk</c> tree to compile at device start instead of the shipped manifest.</summary>
     public const string SourceVariable = "VULKANSTORY_VK_SHADER_SOURCE";
 
+    /// <summary>
+    /// A shader pack to load over the shipped native programs: an id resolved under <c>shaderpacks/</c> in the
+    /// runtime package directory, or an absolute pack directory. Empty selects no pack. The Options menu
+    /// carries the selection once the pack UI exists (docs/shader-packs.md).
+    /// </summary>
+    public const string PackVariable = "VULKANSTORY_VK_SHADER_PACK";
+
     /// <summary>Native shader loading mode: disabled, precompiled directory, precompiled pack or source compilation.</summary>
     public enum Mode { Off, Directory, Pack, Source }
 

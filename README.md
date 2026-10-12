@@ -131,6 +131,7 @@ your own installation.
 | `src/VulkanStory.Input`, `src/VulkanStory.Input.Companion` | Analog movement protocol and the optional server companion |
 | `native/` | Native bootstrap and provider bridges (NGX, FSR3, FSR4, XeSS-FG, Streamline) |
 | `shaders/native` | Native GLSL shader corpus |
+| `samples/` | Example shader pack; see [samples/shaderpacks](samples/shaderpacks/README.md) |
 | `tools/` | Shader compiler, game-profile/preflight tools and the performance collector |
 | `scripts/` | Build, stage, package, deploy and removal scripts |
 | `sdk/` | Vendor SDKs as pinned submodules; `streamline-release-2.14.1/` is fetched, not tracked |

@@ -253,6 +253,9 @@ Shaders:
   tree at device start instead.
 - `ShaderOverridePolicy` tracks shader assets changed by mods or resource packs and
   only uses a retained source where the original asset is unchanged.
+- `VULKANSTORY_VK_SHADER_PACK` selects a shader pack under `shaderpacks/` beside
+  the runtime; its sources compile at device start over the shipped programs,
+  with per-slot fallback to the shipped program ([shader packs](shader-packs.md)).
 - Staged sources use weak stage identities, so shader reloads release obsolete
   source text while live stages remain reusable across links.
 
